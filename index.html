@@ -1,0 +1,4201 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lager & Rezeptur</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#E2564B">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Lager">
+<meta name="mobile-web-app-capable" content="yes">
+<script>
+  window.addEventListener('error', function (e) {
+    var root = document.getElementById('root');
+    if (root && !root.dataset.rendered) {
+      root.innerHTML = '<div style="padding:24px;font-family:monospace;white-space:pre-wrap;color:#B3401D;background:#FBEAE2;max-width:700px;margin:40px auto;border-radius:8px;line-height:1.5;">' +
+        '<strong>Fehler beim Laden der App:</strong>\n\n' + (e.message || 'Unbekannter Fehler') +
+        '\n\nDatei: ' + (e.filename || '-') + ' Zeile: ' + (e.lineno || '-') +
+        '\n\nBitte mach einen Screenshot von diesem Text.</div>';
+    }
+  });
+</script>
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin="anonymous" data-tesseract-loader="1" src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script crossorigin="anonymous" data-xlsx-loader="1" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  body { margin: 0; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="padding:24px;font-family:sans-serif;color:#8A8073;max-width:500px;margin:60px auto;text-align:center;">
+    Lade die App …
+  </div>
+</div>
+<script type="text/babel" data-presets="react">
+// ---------- Simple inline icon components (replace lucide-react for standalone HTML) ----------
+const { useState, useEffect, useMemo } = React;
+
+function Icon({ paths, size = 16, color = "currentColor", strokeWidth = 2, viewBox = "0 0 24 24" }) {
+  return (
+    <svg width={size} height={size} viewBox={viewBox} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      {paths}
+    </svg>
+  );
+}
+
+const Package = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+        <path d="M3 8v8l9 5 9-5V8" />
+        <path d="M12 13v8" />
+      </>
+    }
+  />
+);
+
+const ChefHat = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <path d="M6 18h12v3H6z" />
+        <path d="M7 18v-6" />
+        <path d="M17 18v-6" />
+        <path d="M6.5 12a4 4 0 0 1 1-7.9 4.5 4.5 0 0 1 9 0 4 4 0 0 1 1 7.9" />
+      </>
+    }
+  />
+);
+
+const Calculator = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <rect x="4" y="2" width="16" height="20" rx="2" />
+        <line x1="8" y1="6" x2="16" y2="6" />
+        <line x1="8" y1="11" x2="8" y2="11" />
+        <line x1="12" y1="11" x2="12" y2="11" />
+        <line x1="16" y1="11" x2="16" y2="11" />
+        <line x1="8" y1="15" x2="8" y2="15" />
+        <line x1="12" y1="15" x2="12" y2="15" />
+        <line x1="16" y1="15" x2="16" y2="15" />
+        <line x1="8" y1="19" x2="8" y2="19" />
+        <line x1="12" y1="19" x2="12" y2="19" />
+        <line x1="16" y1="19" x2="16" y2="19" />
+      </>
+    }
+  />
+);
+
+const Tag = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.83z" />
+        <circle cx="7.5" cy="7.5" r="1.2" />
+      </>
+    }
+  />
+);
+
+const Plus = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </>
+    }
+  />
+);
+
+const Trash2 = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <path d="M3 6h18" />
+        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <line x1="10" y1="11" x2="10" y2="17" />
+        <line x1="14" y1="11" x2="14" y2="17" />
+      </>
+    }
+  />
+);
+
+const Pencil = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </>
+    }
+  />
+);
+
+const X = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </>
+    }
+  />
+);
+
+const CheckCircle2 = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9 12l2 2 4-4" />
+      </>
+    }
+  />
+);
+
+const AlertTriangle = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12" y2="17" />
+      </>
+    }
+  />
+);
+
+const ShoppingCart = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <circle cx="9" cy="21" r="1" />
+        <circle cx="20" cy="21" r="1" />
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+      </>
+    }
+  />
+);
+
+const Settings = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </>
+    }
+  />
+);
+
+const ChevronDown = (props) => (
+  <Icon {...props} paths={<polyline points="6 9 12 15 18 9" />} />
+);
+
+// ---------- Design tokens (angelehnt an Bäckerei Kurz, Ischgl) ----------
+const COL = {
+  bg: "#FBF5EB",
+  surface: "#FFFFFF",
+  ink: "#2E2118",
+  inkMuted: "#8C7C68",
+  line: "#EADFC9",
+  accent: "#E2564B",
+  accentSoft: "#FBE7E3",
+  warn: "#B3401D",
+  warnSoft: "#FBEAE2",
+  ok: "#55804A",
+  okSoft: "#E9F1E4",
+  amber: "#A9720C",
+  amberSoft: "#FBF1DE",
+};
+
+const ALLERGENS = [
+  { key: "gluten", label: "Gluten" },
+  { key: "krebstiere", label: "Krebstiere" },
+  { key: "eier", label: "Eier" },
+  { key: "fisch", label: "Fisch" },
+  { key: "erdnuesse", label: "Erdnüsse" },
+  { key: "soja", label: "Soja" },
+  { key: "milch", label: "Milch/Laktose" },
+  { key: "schalenfruechte", label: "Schalenfrüchte (Nüsse)" },
+  { key: "sellerie", label: "Sellerie" },
+  { key: "senf", label: "Senf" },
+  { key: "sesam", label: "Sesam" },
+  { key: "sulfite", label: "Sulfite/Schwefeldioxid" },
+  { key: "lupinen", label: "Lupinen" },
+  { key: "weichtiere", label: "Weichtiere" },
+];
+const allergenLabel = (key) => ALLERGENS.find((a) => a.key === key)?.label ?? key;
+
+const UNITS = ["kg", "g", "l", "ml", "Stk"];
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+// ---------- Rechnungs-Scan: Hilfsfunktionen ----------
+function normalizeName(s) {
+  return (s || "")
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+function levenshtein(a, b) {
+  const m = a.length,
+    n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+function nameSimilarity(a, b) {
+  const na = normalizeName(a),
+    nb = normalizeName(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+  const dist = levenshtein(na, nb);
+  return 1 - dist / Math.max(na.length, nb.length);
+}
+function findBestMatch(name, list, getName = (x) => x.name) {
+  let best = null,
+    bestScore = 0;
+  for (const item of list) {
+    const score = nameSimilarity(name, getName(item));
+    if (score > bestScore) {
+      bestScore = score;
+      best = item;
+    }
+  }
+  return { material: bestScore >= 0.55 ? best : null, match: bestScore >= 0.55 ? best : null, score: bestScore };
+}
+function parsePriceToken(token) {
+  const cleaned = token.replace(/[€\s]/g, "");
+  if (/,\d{2}$/.test(cleaned)) {
+    return parseFloat(cleaned.replace(/\./g, "").replace(",", "."));
+  }
+  return parseFloat(cleaned.replace(",", "."));
+}
+function normalizeUnitToken(u) {
+  const t = u.toLowerCase();
+  if (t === "stück") return "stk";
+  return t;
+}
+function convertQty(value, fromUnit, toUnit) {
+  if (value == null || !fromUnit || !toUnit) return null;
+  const f = normalizeUnitToken(fromUnit);
+  const t = normalizeUnitToken(toUnit);
+  if (f === t) return value;
+  if (f === "kg" && t === "g") return value * 1000;
+  if (f === "g" && t === "kg") return value / 1000;
+  if (f === "l" && t === "ml") return value * 1000;
+  if (f === "ml" && t === "l") return value / 1000;
+  return null;
+}
+function extractQuantity(line, beforeIndex) {
+  const re = /(\d+(?:[.,]\d+)?)\s*(kg|g|l|ml|stk|stück)\b/gi;
+  let m;
+  let best = null;
+  while ((m = re.exec(line))) {
+    if (beforeIndex != null && m.index >= beforeIndex - 1) continue;
+    best = { value: parseFloat(m[1].replace(",", ".")), unit: normalizeUnitToken(m[2]) };
+  }
+  return best;
+}
+function parseInvoiceText(text, materials) {
+  const priceRe = /(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*€?/g;
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 2);
+  const items = [];
+  for (const line of lines) {
+    const matches = [...line.matchAll(priceRe)];
+    if (matches.length === 0) continue;
+    const last = matches[matches.length - 1];
+    const price = parsePriceToken(last[0]);
+    if (!isFinite(price) || price <= 0 || price > 100000) continue;
+    let name = line.slice(0, last.index).trim();
+    const qty = extractQuantity(line, last.index);
+    name = name
+      .replace(/^\d+[.,]?\d*\s*(kg|g|l|ml|stk|stück|x)?\s*/i, "")
+      .replace(/[-–:]+$/, "")
+      .trim();
+    if (!name || name.length < 2) continue;
+    const { material, score } = findBestMatch(name, materials);
+    items.push({
+      id: uid(),
+      rawLine: line,
+      erkannterName: name,
+      preis: price,
+      mengeGekauft: qty ? qty.value : null,
+      mengeEinheit: qty ? qty.unit : null,
+      materialId: material ? material.id : "",
+      matchScore: score,
+      uebernehmenPreis: true,
+      uebernehmenMenge: !!qty,
+    });
+  }
+  return items;
+}
+
+// ---------- Preise/Allergene-Import: Hilfsfunktionen ----------
+function parseEuro(str) {
+  if (!str) return null;
+  const cleaned = String(str)
+    .replace(/[€\s]/g, "")
+    .replace(",", ".");
+  const n = parseFloat(cleaned);
+  return isFinite(n) ? n : null;
+}
+
+const ALLERGEN_KEYWORDS = {
+  gluten: ["weizen", "roggen", "gerste", "hafer", "dinkel", "grünkern", "kamut", "einkorn", "emmer", "graham", "malz"],
+  milch: ["milch", "butter", "sahne", "rahm", "käse", "joghurt", "topfen", "mascarpone", "molke", "schlagobers"],
+  eier: ["eiweiss", "eiweiß", "eigelb", "\\bdotter\\b", "vollei", "\\bei\\b", "\\beier\\b"],
+  soja: ["soja"],
+  schalenfruechte: ["mandel", "haselnuss", "walnuss", "pistazie", "macadamia", "cashew", "pekannuss", "paranuss"],
+  erdnuesse: ["erdnuss", "erdnüsse"],
+  sesam: ["sesam"],
+  senf: ["\\bsenf\\b"],
+  sellerie: ["sellerie"],
+  sulfite: ["schwefeldioxid", "sulfit"],
+  lupinen: ["lupine", "süsslupinenmehl", "süßlupinenmehl"],
+  krebstiere: ["krebstier", "garnele"],
+  fisch: ["\\bfisch\\b"],
+  weichtiere: ["weichtier", "muschel", "tintenfisch"],
+};
+function extractAllergens(text) {
+  if (!text) return [];
+  const lower = text.toLowerCase();
+  const found = [];
+  Object.entries(ALLERGEN_KEYWORDS).forEach(([key, words]) => {
+    if (words.some((w) => new RegExp(w, "i").test(lower))) found.push(key);
+  });
+  return found;
+}
+
+const ADDITIVE_KEYWORDS = [
+  "Emulgator",
+  "Konservierungsstoff",
+  "Säuerungsmittel",
+  "Säureregulator",
+  "Verdickungsmittel",
+  "Stabilisator",
+  "Farbstoff",
+  "Geliermittel",
+  "Trennmittel",
+  "Backtriebmittel",
+  "Antioxidationsmittel",
+  "Süßungsmittel",
+];
+function extractZusatzstoffe(text) {
+  if (!text) return "";
+  const found = [];
+  ADDITIVE_KEYWORDS.forEach((kw) => {
+    const re = new RegExp(kw + "[^,;]*", "gi");
+    let m;
+    while ((m = re.exec(text))) {
+      found.push(m[0].trim());
+    }
+  });
+  return [...new Set(found)].join("; ");
+}
+
+function parsePriceList(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
+  if (lines.length < 2) return { rows: [], error: "Keine Datenzeilen gefunden. Bitte die komplette Tabelle inkl. Kopfzeile einfügen." };
+  const delimiter = lines[0].includes("\t") ? "\t" : ",";
+  const headers = lines[0].split(delimiter).map((h) => h.trim().toLowerCase());
+  const idxNameMain = headers.findIndex((h) => h.includes("produktbezeichnung im rezept"));
+  const idxNameFallback = headers.findIndex((h) => h.trim() === "produkt");
+  const idxPriceKg = headers.findIndex((h) => h.includes("nettopreis / kg") || h.includes("nettopreis/kg"));
+  const idxLabel = headers.findIndex((h) => h.includes("lebensmittelkennzeichnung"));
+  const idxAllergenCol = headers.findIndex((h) => h.trim() === "allergene");
+
+  const nameIdx = idxNameMain !== -1 ? idxNameMain : idxNameFallback;
+  if (nameIdx === -1 || idxPriceKg === -1) {
+    return {
+      rows: [],
+      error:
+        "Konnte die Spalten \"Produktbezeichnung im Rezept\" (oder \"Produkt\") und/oder \"Nettopreis / kg\" nicht finden. Bitte die Original-Kopfzeile mit einfügen.",
+    };
+  }
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(delimiter);
+    const name = (cells[nameIdx] || "").trim();
+    if (!name) continue;
+    const priceKg = parseEuro(cells[idxPriceKg]);
+    const labelText = idxLabel !== -1 ? (cells[idxLabel] || "").trim() : "";
+    const allergenColText = idxAllergenCol !== -1 ? (cells[idxAllergenCol] || "").trim() : "";
+    const combinedText = [labelText, allergenColText].filter(Boolean).join(", ");
+    rows.push({
+      rawName: name,
+      priceKg,
+      allergene: extractAllergens(combinedText || name),
+      zusatzstoffe: extractZusatzstoffe(combinedText),
+    });
+  }
+  return { rows, error: null };
+}
+
+const fmtEUR = (n) => (isFinite(n) ? n.toLocaleString("de-DE", { style: "currency", currency: "EUR" }) : "–");
+// Löst "virtuelle" Rohstoffe (z.B. Sauerteig = Mehl+Wasser) rekursiv in echte, gelagerte Rohstoffe auf.
+// Findet/erzeugt zu bestehenden Rohstoffen (per Namensabgleich, unabhängig von IDs) die passende
+// Vorteig-Auflösung, damit ältere, schon eingerichtete Lager automatisch nachgerüstet werden.
+function migrateVorteige(materials) {
+  const findByName = (list, names) =>
+    list.find((m) => names.some((n) => m.name.trim().toLowerCase() === n.toLowerCase()));
+
+  const defs = [
+    { match: ["Sauerteig D."], teile: [["Dinkelmehl", 0.5], ["Wasser", 0.5]] },
+    { match: ["Sauerteig R."], teile: [["Roggen 960", 0.5], ["Wasser", 0.5]] },
+    { match: ["Dinkel K.", "Kochstück D.", "Kochstück D"], teile: [["Wasser", 0.8], ["Dinkelmehl", 0.2]] },
+    { match: ["Roggen K.", "Kochstück R.", "Kochstück R"], teile: [["Wasser", 0.806452], ["Roggen 960", 0.193548]] },
+    { match: ["Kochstück RS.", "Kochstück RS"], teile: [["Wasser", 0.75], ["Roggenschrot", 0.25]] },
+  ];
+
+  let changed = false;
+  let updated = materials.map((m) => {
+    if (m.vorteig) return m;
+    const def = defs.find((d) => d.match.some((n) => n.toLowerCase() === m.name.trim().toLowerCase()));
+    if (!def) return m;
+    const teile = def.teile
+      .map(([matName, anteil]) => {
+        const target = findByName(materials, [matName]);
+        return target && target.id !== m.id ? { materialId: target.id, anteil } : null;
+      })
+      .filter(Boolean);
+    if (teile.length === 0) return m;
+    changed = true;
+    return { ...m, vorteig: { teile } };
+  });
+
+  // Knoblauchbutter automatisch anlegen, falls noch nicht vorhanden
+  if (!findByName(updated, ["Knoblauchbutter"])) {
+    const butter = findByName(updated, ["Butter"]);
+    const knoblauch = findByName(updated, ["Knoblauch"]);
+    const salz = findByName(updated, ["Salz"]);
+    const oregano = findByName(updated, ["Oregano"]);
+    const pfeffer = findByName(updated, ["Pfeffer"]);
+    if (butter && knoblauch && salz && oregano && pfeffer) {
+      updated = [
+        ...updated,
+        {
+          id: uid(),
+          name: "Knoblauchbutter",
+          price: 0,
+          unit: "g",
+          mindestbestand: 0,
+          stock: 0,
+          zusatzstoffe: "",
+          allergene: [],
+          vorteig: {
+            teile: [
+              { materialId: butter.id, anteil: 0.851064 },
+              { materialId: knoblauch.id, anteil: 0.13617 },
+              { materialId: salz.id, anteil: 0.002553 },
+              { materialId: oregano.id, anteil: 0.008511 },
+              { materialId: pfeffer.id, anteil: 0.001702 },
+            ],
+          },
+        },
+      ];
+      changed = true;
+    }
+  }
+
+  return { materials: updated, changed };
+}
+
+// Legt das Rezept "Knoblauch Dinkelciabatta" automatisch an (Kopie von "Dinkel Ciabatta" + Knoblauchbutter-Topping),
+// falls es noch nicht existiert.
+function migrateRecipes(recipes, materials) {
+  const findRecipe = (name) => recipes.find((r) => r.name.trim().toLowerCase() === name.toLowerCase());
+  const findMat = (name) => materials.find((m) => m.name.trim().toLowerCase() === name.toLowerCase());
+
+  if (findRecipe("Knoblauch Dinkelciabatta")) return { recipes, changed: false };
+
+  const base = findRecipe("Dinkel Ciabatta");
+  const kb = findMat("Knoblauchbutter");
+  if (!base || !kb) return { recipes, changed: false };
+
+  const neu = {
+    id: uid(),
+    name: "Knoblauch Dinkelciabatta",
+    kategorie: base.kategorie,
+    ausbringungMenge: base.ausbringungMenge,
+    ausbringungEinheit: base.ausbringungEinheit,
+    items: [...base.items, { materialId: kb.id, menge: 50 }],
+  };
+  return { recipes: [...recipes, neu], changed: true };
+}
+
+function expandVorteige(items, materials, depth = 0) {
+  if (depth > 5) return items; // Sicherheitsnetz gegen Zirkelbezüge
+  const result = new Map();
+  for (const it of items) {
+    const mat = materials.find((m) => m.id === it.materialId);
+    if (mat && mat.vorteig && mat.vorteig.teile && mat.vorteig.teile.length > 0) {
+      const subItems = mat.vorteig.teile.map((t) => ({ materialId: t.materialId, menge: it.menge * t.anteil }));
+      const expanded = expandVorteige(subItems, materials, depth + 1);
+      expanded.forEach((e) => {
+        result.set(e.materialId, (result.get(e.materialId) || 0) + e.menge);
+      });
+    } else {
+      result.set(it.materialId, (result.get(it.materialId) || 0) + it.menge);
+    }
+  }
+  return [...result.entries()].map(([materialId, menge]) => ({ materialId, menge }));
+}
+
+const groupByKategorie = (recipes) => {
+  const groups = {};
+  const order = [];
+  recipes.forEach((r) => {
+    const k = r.kategorie || "Sonstige";
+    if (!groups[k]) {
+      groups[k] = [];
+      order.push(k);
+    }
+    groups[k].push(r);
+  });
+  return order.map((k) => ({ kategorie: k, items: groups[k] }));
+};
+const fmtNum = (n, d = 3) =>
+  isFinite(n) ? n.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: d }) : "–";
+
+// ---------- Seed data (aus Excel-Import) ----------
+const seedMaterials = [
+  { id: "m1", name: "Apfelsaft", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m2", name: "B. Zucker", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m3", name: "Backmalz", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m4", name: "Backpulver", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m5", name: "Birne", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m6", name: "Blatt Gelatine", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m7", name: "Butter", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m8", name: "Butter 60°C", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m9", name: "Dinkelflocken", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m10", name: "Dinkelmalz", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m11", name: "Dinkelmehl", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m12", name: "Dinkelvollmehl", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m13", name: "Dotter", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m14", name: "Dunkle K.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m15", name: "Eier", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m16", name: "Eigelb", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m17", name: "Eiweiß", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m18", name: "Galantine", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m19", name: "Gelantine", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m20", name: "Germ", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m21", name: "Haselmüsse", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m22", name: "Hefe", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m23", name: "Honig", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m24", name: "Kakao", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m25", name: "Kartoffeln G. und K.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m26", name: "Kletzen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m27", name: "Knoblauch", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m28", name: "Kochstück", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m29", name: "Kochstück D", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m91", anteil: 0.8 }, { materialId: "m11", anteil: 0.2 }] } },
+  { id: "m30", name: "Kochstück D.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m91", anteil: 0.8 }, { materialId: "m11", anteil: 0.2 }] } },
+  { id: "m31", name: "Kochstück G.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m32", name: "Kochstück R", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m91", anteil: 0.806452 }, { materialId: "m61", anteil: 0.193548 }] } },
+  { id: "m33", name: "Kochstück R.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m91", anteil: 0.806452 }, { materialId: "m61", anteil: 0.193548 }] } },
+  { id: "m34", name: "Kochstück RS.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m91", anteil: 0.75 }, { materialId: "m64", anteil: 0.25 }] } },
+  { id: "m35", name: "Kristallzucker", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m36", name: "Kuvertüre D.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m37", name: "Kuvertüre M.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m38", name: "Kuvertüre W.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m39", name: "Leinsamen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m40", name: "Maizena", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m41", name: "Malz", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m42", name: "Marillen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m43", name: "MarillenM.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m44", name: "Mehl", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m45", name: "Milch", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m46", name: "Mohn", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m47", name: "Mohn G.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m48", name: "Muskatnuss", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m49", name: "Nelkenpulver", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m50", name: "Obers", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m51", name: "Oliven ÖL", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m52", name: "Orangeat", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m53", name: "Oregano", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m54", name: "Pfeffer", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m55", name: "Pflaumen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m56", name: "Powidell", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m57", name: "Quellstück", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m58", name: "Ribiselmarmelade", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m59", name: "Ribissel", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m60", name: "Roggen 2500", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m61", name: "Roggen 960", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m62", name: "Roggenmalz", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m63", name: "Roggenmehl 960", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m64", name: "Roggenschrot", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m65", name: "Rosinen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m66", name: "Rum", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m67", name: "Salz", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m68", name: "Salz und Vanille", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m69", name: "Sauerrahm", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m70", name: "Sauerteig", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m71", name: "Sauerteig D.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m11", anteil: 0.5 }, { materialId: "m91", anteil: 0.5 }] } },
+  { id: "m72", name: "Sauerteig R.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m61", anteil: 0.5 }, { materialId: "m91", anteil: 0.5 }] } },
+  { id: "m73", name: "Schoko Trops", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m74", name: "Sonnenblumen K.", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m75", name: "Staubzucker", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m76", name: "Sultaninen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m77", name: "Süsse Brösel", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m78", name: "Trockengerm", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m79", name: "Trockenhefe", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m80", name: "Tunkmasse", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m81", name: "Vanille", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m82", name: "Vanille, Zitrone", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m83", name: "Vanillearoma", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m84", name: "Vanillepuding", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m85", name: "Vanilleschote", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m86", name: "Vanillezucker", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m87", name: "Vollei", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m88", name: "Vollkornmehl", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m89", name: "Wallnüsse", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m90", name: "Walnüsse gereiben", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m91", name: "Wasser", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m92", name: "Wasser Kochend", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m93", name: "Zimt", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m94", name: "Zimtstangen", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m95", name: "Zitronat", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m96", name: "Zitrone", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m97", name: "Zitronenaroma", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m98", name: "Zucker", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m99", name: "Öl", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [] },
+  { id: "m100", name: "Knoblauchbutter", price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: [], vorteig: { teile: [{ materialId: "m7", anteil: 0.851064 }, { materialId: "m27", anteil: 0.136170 }, { materialId: "m67", anteil: 0.002553 }, { materialId: "m53", anteil: 0.008511 }, { materialId: "m54", anteil: 0.001702 }] } },
+];
+
+const seedRecipes = [
+  {
+    id: "r1",
+    name: "Bauernbrot",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m61", menge: 315.0 }, { materialId: "m11", menge: 165.0 }, { materialId: "m91", menge: 280.0 }, { materialId: "m72", menge: 380.0 }, { materialId: "m78", menge: 3.0 }, { materialId: "m67", menge: 17.0 }],
+  },
+  {
+    id: "r2",
+    name: "Roggenpur",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m61", menge: 295.0 }, { materialId: "m60", menge: 98.0 }, { materialId: "m91", menge: 300.0 }, { materialId: "m72", menge: 446.0 }, { materialId: "m78", menge: 3.0 }, { materialId: "m67", menge: 17.0 }],
+  },
+  {
+    id: "r3",
+    name: "A Christel",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m61", menge: 75.0 }, { materialId: "m11", menge: 260.0 }, { materialId: "m91", menge: 150.0 }, { materialId: "m72", menge: 245.0 }, { materialId: "m30", menge: 115.0 }, { materialId: "m20", menge: 2.0 }, { materialId: "m67", menge: 11.0 }],
+  },
+  {
+    id: "r4",
+    name: "Dinkelpur",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 530.0 }, { materialId: "m28", menge: 50.0 }, { materialId: "m91", menge: 275.0 }, { materialId: "m71", menge: 300.0 }, { materialId: "m78", menge: 4.0 }, { materialId: "m67", menge: 18.0 }],
+  },
+  {
+    id: "r5",
+    name: "Zeitlos",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 223.0 }, { materialId: "m63", menge: 120.0 }, { materialId: "m91", menge: 138.0 }, { materialId: "m71", menge: 217.0 }, { materialId: "m33", menge: 240.0 }, { materialId: "m79", menge: 2.0 }, { materialId: "m67", menge: 12.0 }],
+  },
+  {
+    id: "r6",
+    name: "Kartoffelwurzel",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 172.0 }, { materialId: "m25", menge: 87.0 }, { materialId: "m69", menge: 23.0 }, { materialId: "m91", menge: 80.0 }, { materialId: "m28", menge: 33.0 }, { materialId: "m48", menge: 0.7 }, { materialId: "m78", menge: 1.5 }, { materialId: "m67", menge: 5.0 }],
+  },
+  {
+    id: "r7",
+    name: "Vollkornbrot",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m64", menge: 50.0 }, { materialId: "m91", menge: 380.0 }, { materialId: "m34", menge: 200.0 }, { materialId: "m88", menge: 420.0 }, { materialId: "m70", menge: 280.0 }, { materialId: "m79", menge: 6.0 }, { materialId: "m67", menge: 17.0 }],
+  },
+  {
+    id: "r8",
+    name: "Körnerkick",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m39", menge: 25.0 }, { materialId: "m9", menge: 25.0 }, { materialId: "m74", menge: 25.0 }, { materialId: "m92", menge: 145.0 }, { materialId: "m57", menge: 220.0 }, { materialId: "m12", menge: 330.0 }, { materialId: "m91", menge: 115.0 }, { materialId: "m71", menge: 170.0 }, { materialId: "m67", menge: 14.0 }, { materialId: "m79", menge: 3.0 }],
+  },
+  {
+    id: "r9",
+    name: "Christstollen",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 165.0 }, { materialId: "m45", menge: 50.0 }, { materialId: "m79", menge: 7.8 }, { materialId: "m98", menge: 32.0 }, { materialId: "m28", menge: 25.0 }, { materialId: "m7", menge: 78.0 }, { materialId: "m86", menge: 5.0 }, { materialId: "m67", menge: 2.5 }],
+  },
+  {
+    id: "r10",
+    name: "Kletzenbrot",
+    kategorie: "Brot",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m61", menge: 62.62 }, { materialId: "m60", menge: 22.22 }, { materialId: "m91", menge: 27.47 }, { materialId: "m72", menge: 68.68 }, { materialId: "m78", menge: 1.0 }, { materialId: "m67", menge: 3.69 }],
+  },
+  {
+    id: "r11",
+    name: "Früchtemischung Ketzenbrot",
+    kategorie: "Fruchtmischungen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m26", menge: 98.4 }, { materialId: "m65", menge: 41.0 }, { materialId: "m55", menge: 59.45 }, { materialId: "m21", menge: 14.35 }, { materialId: "m89", menge: 14.35 }, { materialId: "m52", menge: 6.15 }, { materialId: "m95", menge: 6.15 }, { materialId: "m94", menge: 1.5 }, { materialId: "m91", menge: 164.0 }, { materialId: "m66", menge: 41.0 }, { materialId: "m1", menge: 49.2 }],
+  },
+  {
+    id: "r12",
+    name: "Einweichen 24h",
+    kategorie: "Fruchtmischungen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m76", menge: 110.0 }, { materialId: "m52", menge: 27.0 }, { materialId: "m66", menge: 50.0 }, { materialId: "m91", menge: 100.0 }],
+  },
+  {
+    id: "r13",
+    name: "Dinkel Ciabatta",
+    kategorie: "Ciabatter",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 212.0 }, { materialId: "m91", menge: 94.0 }, { materialId: "m28", menge: 85.0 }, { materialId: "m41", menge: 3.0 }, { materialId: "m78", menge: 2.0 }, { materialId: "m67", menge: 6.0 }],
+  },
+  {
+    id: "r14",
+    name: "Sauerteig Baguette",
+    kategorie: "Ciabatter",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 175.0 }, { materialId: "m91", menge: 55.0 }, { materialId: "m71", menge: 70.0 }, { materialId: "m28", menge: 65.0 }, { materialId: "m51", menge: 4.0 }, { materialId: "m78", menge: 2.0 }, { materialId: "m41", menge: 5.0 }, { materialId: "m67", menge: 7.0 }],
+  },
+  {
+    id: "r15",
+    name: "Knoblauchpaste",
+    kategorie: "Ciabatter",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m7", menge: 1000.0 }, { materialId: "m27", menge: 160.0 }, { materialId: "m67", menge: 3.0 }, { materialId: "m53", menge: 10.0 }, { materialId: "m54", menge: 2.0 }],
+  },
+  {
+    id: "r16",
+    name: "Wurzelbrot",
+    kategorie: "Ciabatter",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 155.0 }, { materialId: "m91", menge: 85.0 }, { materialId: "m70", menge: 93.0 }, { materialId: "m28", menge: 62.0 }, { materialId: "m79", menge: 2.0 }, { materialId: "m41", menge: 5.0 }, { materialId: "m67", menge: 5.0 }],
+  },
+  {
+    id: "r17",
+    name: "Semmelteig",
+    kategorie: "Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 54.5 }, { materialId: "m91", menge: 17.5 }, { materialId: "m29", menge: 16.7 }, { materialId: "m32", menge: 10.0 }, { materialId: "m41", menge: 1.5 }, { materialId: "m79", menge: 0.8 }, { materialId: "m67", menge: 1.2 }],
+  },
+  {
+    id: "r18",
+    name: "Dinkelkrusti",
+    kategorie: "Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 45.0 }, { materialId: "m63", menge: 9.0 }, { materialId: "m91", menge: 33.0 }, { materialId: "m28", menge: 12.4 }, { materialId: "m3", menge: 1.3 }, { materialId: "m79", menge: 0.3 }, { materialId: "m67", menge: 1.7 }, { materialId: "m98", menge: 0.5 }],
+  },
+  {
+    id: "r19",
+    name: "Burger Buns",
+    kategorie: "Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 62.0 }, { materialId: "m28", menge: 20.0 }, { materialId: "m45", menge: 20.0 }, { materialId: "m98", menge: 3.6 }, { materialId: "m7", menge: 3.6 }, { materialId: "m15", menge: 14.0 }, { materialId: "m41", menge: 1.3 }, { materialId: "m79", menge: 1.3 }, { materialId: "m67", menge: 1.5 }],
+  },
+  {
+    id: "r20",
+    name: "Kornspitz",
+    kategorie: "Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m39", menge: 10.0 }, { materialId: "m74", menge: 10.0 }, { materialId: "m60", menge: 30.0 }, { materialId: "m62", menge: 7.5 }, { materialId: "m91", menge: 173.0 }, { materialId: "m11", menge: 218.0 }, { materialId: "m28", menge: 40.0 }, { materialId: "m67", menge: 7.0 }, { materialId: "m79", menge: 1.0 }, { materialId: "m10", menge: 6.0 }],
+  },
+  {
+    id: "r21",
+    name: "Mohnfülle",
+    kategorie: "Füllungen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m47", menge: 368.0 }, { materialId: "m45", menge: 189.0 }, { materialId: "m43", menge: 77.0 }, { materialId: "m56", menge: 154.0 }, { materialId: "m98", menge: 61.0 }, { materialId: "m93", menge: 3.0 }, { materialId: "m66", menge: 10.0 }],
+  },
+  {
+    id: "r22",
+    name: "Mürbe Kipferl",
+    kategorie: "Süßes Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 56.0 }, { materialId: "m91", menge: 12.0 }, { materialId: "m28", menge: 11.0 }, { materialId: "m45", menge: 14.0 }, { materialId: "m7", menge: 7.6 }, { materialId: "m98", menge: 7.6 }, { materialId: "m41", menge: 2.0 }, { materialId: "m79", menge: 0.8 }, { materialId: "m67", menge: 1.0 }],
+  },
+  {
+    id: "r23",
+    name: "Brioche",
+    kategorie: "Süßes Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 294.6 }, { materialId: "m45", menge: 58.9 }, { materialId: "m31", menge: 53.2 }, { materialId: "m91", menge: 42.6 }, { materialId: "m87", menge: 64.8 }, { materialId: "m23", menge: 10.1 }, { materialId: "m35", menge: 37.3 }, { materialId: "m66", menge: 10.6 }, { materialId: "m22", menge: 17.7 }, { materialId: "m97", menge: 2.9 }, { materialId: "m83", menge: 2.9 }, { materialId: "m7", menge: 53.2 }, { materialId: "m67", menge: 4.3 }],
+  },
+  {
+    id: "r24",
+    name: "Buchteln",
+    kategorie: "Süßes Gebäck",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 445.0 }, { materialId: "m10", menge: 10.0 }, { materialId: "m45", menge: 75.0 }, { materialId: "m28", menge: 80.0 }, { materialId: "m15", menge: 40.0 }, { materialId: "m13", menge: 20.0 }, { materialId: "m7", menge: 55.0 }, { materialId: "m23", menge: 18.0 }, { materialId: "m98", menge: 35.0 }, { materialId: "m66", menge: 8.0 }, { materialId: "m79", menge: 10.0 }, { materialId: "m67", menge: 5.0 }, { materialId: "m81", menge: 3.0 }, { materialId: "m96", menge: 3.0 }],
+  },
+  {
+    id: "r25",
+    name: "Linzerschnitte",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m7", menge: 400.0 }, { materialId: "m75", menge: 400.0 }, { materialId: "m68", menge: 10.0 }, { materialId: "m96", menge: 2.0 }, { materialId: "m93", menge: 4.0 }, { materialId: "m49", menge: 1.0 }, { materialId: "m13", menge: 160.0 }, { materialId: "m17", menge: 180.0 }, { materialId: "m90", menge: 400.0 }, { materialId: "m77", menge: 600.0 }, { materialId: "m44", menge: 200.0 }, { materialId: "m58", menge: 500.0 }],
+  },
+  {
+    id: "r26",
+    name: "Marillenkuchen",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m7", menge: 200.0 }, { materialId: "m75", menge: 220.0 }, { materialId: "m82", menge: 3.0 }, { materialId: "m13", menge: 140.0 }, { materialId: "m45", menge: 110.0 }, { materialId: "m17", menge: 210.0 }, { materialId: "m98", menge: 180.0 }, { materialId: "m67", menge: 1.0 }, { materialId: "m44", menge: 600.0 }, { materialId: "m4", menge: 6.0 }, { materialId: "m42", menge: 1200.0 }],
+  },
+  {
+    id: "r27",
+    name: "Streusel",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m7", menge: 200.0 }, { materialId: "m44", menge: 200.0 }, { materialId: "m75", menge: 200.0 }],
+  },
+  {
+    id: "r28",
+    name: "Ribiselschaumschnitte",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m7", menge: 85.0 }, { materialId: "m75", menge: 250.0 }, { materialId: "m13", menge: 120.0 }, { materialId: "m82", menge: 6.0 }, { materialId: "m44", menge: 480.0 }, { materialId: "m4", menge: 9.0 }],
+  },
+  {
+    id: "r29",
+    name: "Schneedecke",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m17", menge: 180.0 }, { materialId: "m75", menge: 300.0 }, { materialId: "m67", menge: 3.0 }, { materialId: "m59", menge: 480.0 }],
+  },
+  {
+    id: "r30",
+    name: "Sachermasse Gemixt",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m8", menge: 233.0 }, { materialId: "m13", menge: 150.0 }, { materialId: "m98", menge: 337.0 }, { materialId: "m80", menge: 225.0 }, { materialId: "m17", menge: 225.0 }, { materialId: "m44", menge: 225.0 }],
+  },
+  {
+    id: "r31",
+    name: "Schokoladenbiskuitt Gemixt",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m7", menge: 150.0 }, { materialId: "m16", menge: 150.0 }, { materialId: "m14", menge: 370.0 }, { materialId: "m17", menge: 340.0 }, { materialId: "m98", menge: 120.0 }, { materialId: "m67", menge: 2.0 }, { materialId: "m40", menge: 60.0 }, { materialId: "m44", menge: 40.0 }],
+  },
+  {
+    id: "r32",
+    name: "Mohntorte",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m13", menge: 100.0 }, { materialId: "m75", menge: 160.0 }, { materialId: "m99", menge: 155.0 }, { materialId: "m91", menge: 155.0 }, { materialId: "m82", menge: 5.0 }, { materialId: "m17", menge: 150.0 }, { materialId: "m35", menge: 150.0 }, { materialId: "m46", menge: 250.0 }, { materialId: "m44", menge: 187.0 }, { materialId: "m4", menge: 4.0 }],
+  },
+  {
+    id: "r33",
+    name: "Biskuit",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m15", menge: 400.0 }, { materialId: "m98", menge: 300.0 }, { materialId: "m82", menge: 4.0 }, { materialId: "m93", menge: 4.0 }, { materialId: "m44", menge: 240.0 }],
+  },
+  {
+    id: "r34",
+    name: "Creme",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m45", menge: 500.0 }, { materialId: "m98", menge: 150.0 }, { materialId: "m84", menge: 50.0 }, { materialId: "m66", menge: 5.0 }, { materialId: "m19", menge: 4.0 }, { materialId: "m50", menge: 500.0 }],
+  },
+  {
+    id: "r35",
+    name: "Biskotten",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m16", menge: 180.0 }, { materialId: "m75", menge: 95.0 }, { materialId: "m82", menge: 4.0 }, { materialId: "m17", menge: 180.0 }, { materialId: "m98", menge: 90.0 }, { materialId: "m67", menge: 3.0 }, { materialId: "m44", menge: 225.0 }],
+  },
+  {
+    id: "r36",
+    name: "Ölgugelhupf",
+    kategorie: "Kuchen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m75", menge: 50.0 }, { materialId: "m99", menge: 62.0 }, { materialId: "m91", menge: 62.0 }, { materialId: "m13", menge: 40.0 }, { materialId: "m17", menge: 60.0 }, { materialId: "m98", menge: 50.0 }, { materialId: "m44", menge: 125.0 }, { materialId: "m4", menge: 3.0 }],
+  },
+  {
+    id: "r37",
+    name: "Vanillemousse",
+    kategorie: "Cremen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m45", menge: 200.0 }, { materialId: "m50", menge: 330.0 }, { materialId: "m85", menge: 1.5 }, { materialId: "m16", menge: 100.0 }, { materialId: "m98", menge: 100.0 }, { materialId: "m6", menge: 5.0 }],
+  },
+  {
+    id: "r38",
+    name: "Schokomousse",
+    kategorie: "Cremen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m36", menge: 360.0 }, { materialId: "m15", menge: 100.0 }, { materialId: "m13", menge: 80.0 }, { materialId: "m35", menge: 50.0 }, { materialId: "m86", menge: 10.0 }, { materialId: "m50", menge: 500.0 }, { materialId: "m67", menge: 2.0 }, { materialId: "m37", menge: 380.0 }, { materialId: "m38", menge: 400.0 }, { materialId: "m18", menge: 6.0 }],
+  },
+  {
+    id: "r39",
+    name: "Italienische Buttercreme",
+    kategorie: "Cremen",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m35", menge: 250.0 }, { materialId: "m17", menge: 250.0 }, { materialId: "m7", menge: 500.0 }],
+  },
+  {
+    id: "r40",
+    name: "Cookies",
+    kategorie: "Stückdessert",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 400.0 }, { materialId: "m7", menge: 250.0 }, { materialId: "m98", menge: 170.0 }, { materialId: "m2", menge: 50.0 }, { materialId: "m73", menge: 230.0 }, { materialId: "m15", menge: 100.0 }, { materialId: "m67", menge: 2.0 }, { materialId: "m81", menge: 5.0 }, { materialId: "m4", menge: 10.0 }],
+  },
+  {
+    id: "r41",
+    name: "Kakao",
+    kategorie: "Stückdessert",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m24", menge: 90.0 }, { materialId: "m44", menge: 310.0 }],
+  },
+  {
+    id: "r42",
+    name: "Birnen Parfait",
+    kategorie: "Patisserie",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m5", menge: 250.0 }, { materialId: "m93", menge: 3.0 }, { materialId: "m96", menge: 1.5 }, { materialId: "m13", menge: 40.0 }, { materialId: "m98", menge: 60.0 }, { materialId: "m86", menge: 10.0 }, { materialId: "m7", menge: 7.0 }, { materialId: "m50", menge: 200.0 }],
+  },
+  {
+    id: "r43",
+    name: "Knoblauch Dinkelciabatta",
+    kategorie: "Ciabatter",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    items: [{ materialId: "m11", menge: 212.0 }, { materialId: "m91", menge: 94.0 }, { materialId: "m28", menge: 85.0 }, { materialId: "m41", menge: 3.0 }, { materialId: "m78", menge: 2.0 }, { materialId: "m67", menge: 6.0 }, { materialId: "m100", menge: 50.0 }],
+  },
+];
+
+// ---------- Small UI helpers ----------
+function TabButton({ active, onClick, icon: Icon, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all"
+      style={{
+        color: active ? "#fff" : COL.inkMuted,
+        backgroundColor: active ? COL.accent : "transparent",
+        boxShadow: active ? "0 1px 2px rgba(226,86,75,0.3)" : "none",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.backgroundColor = "#EFE8D8";
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.backgroundColor = "transparent";
+      }}
+    >
+      <Icon size={16} strokeWidth={2} />
+      {children}
+    </button>
+  );
+}
+
+function Card({ children, style }) {
+  return (
+    <div
+      className="rounded-xl p-5"
+      style={{
+        backgroundColor: COL.surface,
+        border: `1px solid ${COL.line}`,
+        boxShadow: "0 1px 2px rgba(38,32,25,0.04), 0 1px 12px rgba(38,32,25,0.03)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span style={{ color: COL.inkMuted }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputStyle = {
+  border: `1px solid ${COL.line}`,
+  borderRadius: "8px",
+  padding: "8px 10px",
+  fontFamily: "'IBM Plex Sans', sans-serif",
+  fontSize: "14px",
+  color: COL.ink,
+  backgroundColor: "#fff",
+  outline: "none",
+};
+
+function AllergenPicker({ selected, onChange }) {
+  const toggle = (key) => {
+    onChange(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key]);
+  };
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {ALLERGENS.map((a) => {
+        const on = selected.includes(a.key);
+        return (
+          <button
+            type="button"
+            key={a.key}
+            onClick={() => toggle(a.key)}
+            className="text-xs px-2 py-1 rounded-full transition-colors"
+            style={{
+              border: `1px solid ${on ? COL.amber : COL.line}`,
+              backgroundColor: on ? COL.amberSoft : "#fff",
+              color: on ? COL.amber : COL.inkMuted,
+              fontWeight: on ? 600 : 400,
+            }}
+          >
+            {a.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- Cloud-Sync über jsonbin.io ----------
+function getConfig() {
+  try {
+    if (window.location.hash && window.location.hash.startsWith("#setup=")) {
+      try {
+        const encoded = decodeURIComponent(window.location.hash.slice(7));
+        const decoded = atob(encoded);
+        const sep = decoded.indexOf("|");
+        if (sep > -1) {
+          const apiKey = decoded.slice(0, sep);
+          const binId = decoded.slice(sep + 1);
+          if (apiKey && binId) {
+            saveConfig(apiKey, binId);
+          }
+        }
+      } catch (e) {}
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    const apiKey = localStorage.getItem("jsonbin_apikey");
+    const binId = localStorage.getItem("jsonbin_binid");
+    if (apiKey && binId) return { apiKey, binId };
+  } catch (e) {}
+  return null;
+}
+function makeSetupUrl(apiKey, binId) {
+  const encoded = btoa(`${apiKey}|${binId}`);
+  return `${window.location.origin}${window.location.pathname}#setup=${encodeURIComponent(encoded)}`;
+}
+function saveConfig(apiKey, binId) {
+  localStorage.setItem("jsonbin_apikey", apiKey);
+  localStorage.setItem("jsonbin_binid", binId);
+}
+function clearConfig() {
+  localStorage.removeItem("jsonbin_apikey");
+  localStorage.removeItem("jsonbin_binid");
+}
+async function createBin(apiKey, data) {
+  const res = await fetch("https://api.jsonbin.io/v3/b", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Master-Key": apiKey, "X-Bin-Name": "lagerdaten" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Erstellen fehlgeschlagen");
+  const json = await res.json();
+  return json.metadata.id;
+}
+async function readBin(apiKey, binId) {
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+    headers: { "X-Master-Key": apiKey },
+  });
+  if (!res.ok) throw new Error("Laden fehlgeschlagen");
+  const json = await res.json();
+  return json.record;
+}
+async function writeBin(apiKey, binId, data) {
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Master-Key": apiKey },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const errJson = await res.json();
+      detail = errJson?.message || "";
+    } catch (e) {}
+    throw new Error(`Speichern fehlgeschlagen (Status ${res.status}${detail ? ": " + detail : ""})`);
+  }
+  return true;
+}
+async function getVersionCount(apiKey, binId) {
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/versions/count`, {
+    headers: { "X-Master-Key": apiKey },
+  });
+  if (!res.ok) throw new Error("Versionsanzahl konnte nicht geladen werden");
+  const json = await res.json();
+  return json.metadata?.versionCount ?? 0;
+}
+async function readBinVersion(apiKey, binId, version) {
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/${version}`, {
+    headers: { "X-Master-Key": apiKey },
+  });
+  if (!res.ok) throw new Error("Version konnte nicht geladen werden");
+  const json = await res.json();
+  return json.record;
+}
+
+function VersionRecoveryPanel({ config, onRestore, onClose }) {
+  const [status, setStatus] = useState("loading"); // loading | ready | error
+  const [versionCount, setVersionCount] = useState(0);
+  const [versionInput, setVersionInput] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [previewError, setPreviewError] = useState("");
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const count = await getVersionCount(config.apiKey, config.binId);
+        setVersionCount(count);
+        setVersionInput(String(Math.max(1, count - 1)));
+        setStatus("ready");
+      } catch (e) {
+        setStatus("error");
+      }
+    })();
+  }, []);
+
+  const loadPreview = async () => {
+    if (!versionInput) return;
+    setLoadingPreview(true);
+    setPreviewError("");
+    setPreview(null);
+    try {
+      const record = await readBinVersion(config.apiKey, config.binId, versionInput);
+      const materials = record.materials || [];
+      const recipes = record.recipes || [];
+      const totalStock = materials.reduce((s, m) => s + (Number(m.stock) || 0), 0);
+      const withStock = materials.filter((m) => Number(m.stock) > 0).length;
+      setPreview({ record, materials: materials.length, recipes: recipes.length, totalStock, withStock });
+    } catch (e) {
+      setPreviewError("Diese Version konnte nicht geladen werden.");
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const restore = () => {
+    if (!preview) return;
+    if (
+      !window.confirm(
+        `Version ${versionInput} wirklich wiederherstellen? Dein aktueller Stand wird durch diese Version ersetzt (${preview.materials} Rohstoffe, ${preview.withStock} davon mit Bestand > 0).`
+      )
+    )
+      return;
+    onRestore(preview.record);
+  };
+
+  return (
+    <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
+          Alte Version aus Cloud-Verlauf wiederherstellen
+        </h3>
+        <button onClick={onClose} style={{ color: COL.inkMuted }}>
+          <X size={16} />
+        </button>
+      </div>
+
+      {status === "loading" && <p className="text-sm" style={{ color: COL.inkMuted }}>Lade Versionsliste…</p>}
+      {status === "error" && (
+        <p className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+          Versionshistorie konnte nicht geladen werden.
+        </p>
+      )}
+
+      {status === "ready" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm" style={{ color: COL.inkMuted }}>
+            Es gibt <strong>{versionCount}</strong> gespeicherte Versionen (jede Änderung wird automatisch als eigene Version
+            abgelegt). Probier verschiedene Versionsnummern durch, bis die Vorschau wieder echte Bestände zeigt – am
+            wahrscheinlichsten ist eine Nummer knapp unter der höchsten.
+          </p>
+          <div className="flex items-center gap-2">
+            <Field label={`Versionsnummer (1–${versionCount})`}>
+              <input
+                style={{ ...inputStyle, width: 140 }}
+                type="number"
+                min="1"
+                max={versionCount}
+                value={versionInput}
+                onChange={(e) => setVersionInput(e.target.value)}
+              />
+            </Field>
+            <button
+              onClick={loadPreview}
+              disabled={loadingPreview}
+              className="text-sm font-medium px-3 py-2 rounded-lg mt-5"
+              style={{ border: `1px solid ${COL.accent}`, color: COL.accent, opacity: loadingPreview ? 0.6 : 1 }}
+            >
+              {loadingPreview ? "Lädt…" : "Vorschau laden"}
+            </button>
+          </div>
+
+          {previewError && (
+            <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+              {previewError}
+            </div>
+          )}
+
+          {preview && (
+            <div className="flex flex-col gap-2">
+              <div
+                className="text-sm px-3 py-2 rounded-lg"
+                style={{ backgroundColor: preview.totalStock > 0 ? COL.okSoft : COL.warnSoft, color: preview.totalStock > 0 ? COL.ok : COL.warn }}
+              >
+                {preview.materials} Rohstoffe, {preview.recipes} Rezepte. {preview.withStock} Rohstoffe haben Bestand &gt; 0
+                (Gesamtsumme: {fmtNum(preview.totalStock)}).
+                {preview.totalStock > 0 ? " Sieht nach echten Daten aus." : " Achtung: sieht nach leerem/genulltem Stand aus."}
+              </div>
+              <button onClick={restore} className="text-sm font-medium px-3 py-2 rounded-lg w-fit" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+                Diese Version wiederherstellen
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SetupScreen({ onReady }) {
+  const [mode, setMode] = useState("neu");
+  const [apiKey, setApiKey] = useState("");
+  const [binId, setBinId] = useState("");
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+  const [createdBinId, setCreatedBinId] = useState("");
+
+  const handleCreate = async () => {
+    if (!apiKey.trim()) return;
+    setWorking(true);
+    setError("");
+    try {
+      const id = await createBin(apiKey.trim(), { materials: seedMaterials, recipes: seedRecipes });
+      saveConfig(apiKey.trim(), id);
+      setCreatedBinId(id);
+    } catch (e) {
+      setError("Erstellen fehlgeschlagen. Bitte den API-Schlüssel prüfen.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!apiKey.trim() || !binId.trim()) return;
+    setWorking(true);
+    setError("");
+    try {
+      await readBin(apiKey.trim(), binId.trim());
+      saveConfig(apiKey.trim(), binId.trim());
+      onReady();
+    } catch (e) {
+      setError("Verbinden fehlgeschlagen. Bitte Schlüssel und Bin-ID prüfen.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <div
+      className="min-h-screen w-full flex items-center justify-center px-4"
+      style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.ink }}
+    >
+      <div className="w-full max-w-md rounded-xl p-6" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
+        <h1 className="text-xl mb-1" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
+          Online-Speicher einrichten
+        </h1>
+        <p className="text-sm mb-4" style={{ color: COL.inkMuted }}>
+          Damit Handy und Laptop dieselben Daten zeigen, brauchst du einmalig einen kostenlosen jsonbin.io-Account.
+        </p>
+
+        <div className="flex gap-1 mb-4 p-1 rounded-lg" style={{ backgroundColor: COL.bg }}>
+          <button
+            onClick={() => setMode("neu")}
+            className="flex-1 text-sm py-2 rounded-md"
+            style={{ backgroundColor: mode === "neu" ? COL.accent : "transparent", color: mode === "neu" ? "#fff" : COL.ink }}
+          >
+            Neu einrichten
+          </button>
+          <button
+            onClick={() => setMode("verbinden")}
+            className="flex-1 text-sm py-2 rounded-md"
+            style={{ backgroundColor: mode === "verbinden" ? COL.accent : "transparent", color: mode === "verbinden" ? "#fff" : COL.ink }}
+          >
+            Vorhandenen verbinden
+          </button>
+        </div>
+
+        {!createdBinId && (
+          <div className="flex flex-col gap-3">
+            <Field label="jsonbin.io API-Schlüssel (X-Master-Key)">
+              <input style={inputStyle} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="$2a$10$..." />
+            </Field>
+            {mode === "verbinden" && (
+              <Field label="Bin-ID (vom ersten Gerät)">
+                <input style={inputStyle} value={binId} onChange={(e) => setBinId(e.target.value)} placeholder="z.B. 64f1a2b3c4d5e6f7..." />
+              </Field>
+            )}
+            {error && (
+              <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+                {error}
+              </div>
+            )}
+            <button
+              onClick={mode === "neu" ? handleCreate : handleConnect}
+              disabled={working}
+              className="text-sm font-medium px-3 py-2 rounded-lg mt-1"
+              style={{ backgroundColor: COL.accent, color: "#fff", opacity: working ? 0.6 : 1 }}
+            >
+              {working ? "Einen Moment …" : mode === "neu" ? "Online-Speicher erstellen" : "Verbinden"}
+            </button>
+          </div>
+        )}
+
+        {createdBinId && (
+          <div className="flex flex-col gap-3">
+            <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+              Speicher erstellt! Merk dir diese Bin-ID für dein zweites Gerät:
+            </div>
+            <input
+              style={{ ...inputStyle, fontFamily: "'IBM Plex Mono', monospace" }}
+              value={createdBinId}
+              readOnly
+              onFocus={(e) => e.target.select()}
+            />
+            <p className="text-xs" style={{ color: COL.inkMuted }}>
+              Trag auf dem zweiten Gerät denselben API-Schlüssel und diese Bin-ID unter "Vorhandenen verbinden" ein.
+            </p>
+            <button
+              onClick={onReady}
+              className="text-sm font-medium px-3 py-2 rounded-lg mt-1"
+              style={{ backgroundColor: COL.accent, color: "#fff" }}
+            >
+              Weiter zur App
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Main App ----------
+function App() {
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
+
+  const [config, setConfig] = useState(() => getConfig());
+  const [tab, setTab] = useState("rohstoffe");
+  const [materials, setMaterials] = useState(seedMaterials);
+  const [recipes, setRecipes] = useState(seedRecipes);
+  const [columnMap, setColumnMap] = useState({});
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [backups, setBackups] = useState([]);
+  const [showBackups, setShowBackups] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showVersionRecovery, setShowVersionRecovery] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [syncState, setSyncState] = useState("idle"); // idle | saving | saved | error
+  const [syncErrorDetail, setSyncErrorDetail] = useState("");
+  const loadedRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!config) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await readBin(config.apiKey, config.binId);
+        if (!cancelled) {
+          let mats = data.materials || [];
+          let recs = data.recipes || [];
+          if (mats.length > 0) {
+            const migMat = migrateVorteige(mats);
+            mats = migMat.materials;
+            const migRec = migrateRecipes(recs, mats);
+            recs = migRec.recipes;
+          }
+          if (data.materials) setMaterials(mats);
+          if (data.recipes) setRecipes(recs);
+          if (data.columnMap) setColumnMap(data.columnMap);
+          if (data.orderHistory) setOrderHistory(data.orderHistory);
+          const existingBackups = data.backups || [];
+          setBackups(existingBackups);
+
+          // Einmal täglich beim ersten Öffnen automatisch eine Sicherung anlegen
+          if (mats.length > 0) {
+            const today = new Date().toISOString().slice(0, 10);
+            const hasTodayBackup = existingBackups.some((b) => b.timestamp && b.timestamp.slice(0, 10) === today);
+            if (!hasTodayBackup) {
+              const snapshot = { timestamp: new Date().toISOString(), materials: mats, recipes: recs, columnMap: data.columnMap || {} };
+              const newBackups = [snapshot, ...existingBackups].slice(0, 5);
+              setBackups(newBackups);
+              writeBin(config.apiKey, config.binId, {
+                materials: mats,
+                recipes: recs,
+                columnMap: data.columnMap || {},
+                orderHistory: data.orderHistory || [],
+                backups: newBackups,
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setSyncState("error");
+      } finally {
+        if (!cancelled) {
+          loadedRef.current = true;
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [config]);
+
+  useEffect(() => {
+    if (!config || !loadedRef.current) return;
+    setSyncState("saving");
+    const t = setTimeout(async () => {
+      try {
+        await writeBin(config.apiKey, config.binId, { materials, recipes, columnMap, orderHistory, backups });
+        setSyncState("saved");
+        setSyncErrorDetail("");
+      } catch (e) {
+        setSyncState("error");
+        setSyncErrorDetail(e?.message || "Unbekannter Fehler");
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [materials, recipes, columnMap, orderHistory]);
+
+  const latestRef = React.useRef({});
+  useEffect(() => {
+    latestRef.current = { materials, recipes, columnMap, orderHistory, backups, config };
+  });
+
+  useEffect(() => {
+    const makeBackupAndSave = () => {
+      if (!loadedRef.current) return; // Noch nicht fertig geladen -> niemals überschreiben
+      const { materials, recipes, columnMap, orderHistory, backups, config } = latestRef.current;
+      if (!config) return;
+      const snapshot = { timestamp: new Date().toISOString(), materials, recipes, columnMap };
+      const newBackups = [snapshot, ...(backups || [])].slice(0, 5);
+      try {
+        const body = JSON.stringify({ materials, recipes, columnMap, orderHistory, backups: newBackups });
+        fetch(`https://api.jsonbin.io/v3/b/${config.binId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "X-Master-Key": config.apiKey },
+          body,
+          keepalive: true,
+        });
+      } catch (e) {}
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") makeBackupAndSave();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", makeBackupAndSave);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", makeBackupAndSave);
+    };
+  }, []);
+
+  const restoreBackup = (b) => {
+    if (!window.confirm(`Stand vom ${new Date(b.timestamp).toLocaleString("de-DE")} wiederherstellen? Der aktuelle Stand wird überschrieben.`))
+      return;
+    setMaterials(b.materials);
+    setRecipes(b.recipes);
+    if (b.columnMap) setColumnMap(b.columnMap);
+    setShowBackups(false);
+  };
+
+  const resetToDefaults = async () => {
+    if (!window.confirm("Wirklich alle Eingaben löschen und auf die ursprünglich importierten Daten zurücksetzen?")) return;
+    setMaterials(seedMaterials);
+    setRecipes(seedRecipes);
+    if (config) {
+      try {
+        await writeBin(config.apiKey, config.binId, { materials: seedMaterials, recipes: seedRecipes });
+      } catch (e) {}
+    }
+  };
+
+  const resetStockToZero = () => {
+    if (!window.confirm("Alle Lagerbestände (Bestand) auf 0 setzen? Preise, Mindestbestände, Rezepte und Zusatzstoffe bleiben erhalten.")) return;
+    setMaterials((prev) => prev.map((m) => ({ ...m, stock: 0 })));
+  };
+
+  const disconnect = () => {
+    if (!window.confirm("Verbindung zum Online-Speicher auf diesem Gerät trennen?")) return;
+    clearConfig();
+    window.location.reload();
+  };
+
+  if (!config) {
+    return (
+      <SetupScreen
+        onReady={() => {
+          setConfig(getConfig());
+        }}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center"
+        style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.inkMuted }}
+      >
+        Lade deine Daten…
+      </div>
+    );
+  }
+
+  const lowStock = materials.filter((m) => m.mindestbestand > 0 && m.stock <= m.mindestbestand);
+
+  return (
+    <div
+      className="min-h-screen w-full"
+      style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.ink }}
+    >
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+        <header className="mb-6">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: COL.accent, boxShadow: "0 2px 6px rgba(226,86,75,0.35)" }}
+              >
+                <Package size={19} color="#fff" strokeWidth={2} />
+              </div>
+              <div>
+                <h1
+                  className="text-2xl sm:text-3xl leading-tight"
+                  style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}
+                >
+                  Lager & Rezeptur
+                </h1>
+                <p className="text-sm" style={{ color: COL.inkMuted }}>
+                  Rohstoffe verwalten, Rezepte kalkulieren, Etiketten erstellen.
+                </p>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="flex items-center gap-3">
+                <span
+                  className="hidden sm:flex items-center gap-1 text-xs"
+                  style={{ color: syncState === "error" ? COL.warn : COL.inkMuted }}
+                >
+                  {syncState === "saving" && "speichert …"}
+                  {syncState === "saved" && (
+                    <>
+                      <CheckCircle2 size={12} /> synchronisiert
+                    </>
+                  )}
+                  {syncState === "error" && <span title={syncErrorDetail}>Speichern fehlgeschlagen ⓘ</span>}
+                </span>
+                <button
+                  onClick={() => setShowSettingsMenu((v) => !v)}
+                  className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+                  style={{ border: `1px solid ${COL.line}`, backgroundColor: showSettingsMenu ? COL.bg : COL.surface, color: COL.ink }}
+                >
+                  <Settings size={16} />
+                  <span className="hidden sm:inline">Einstellungen</span>
+                  <ChevronDown size={14} style={{ color: COL.inkMuted }} />
+                </button>
+              </div>
+
+              {showSettingsMenu && (
+                <>
+                  <div className="fixed inset-0 z-[5]" onClick={() => setShowSettingsMenu(false)} />
+                  <div
+                    className="absolute right-0 top-full mt-2 w-64 rounded-xl overflow-hidden z-10"
+                    style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}`, boxShadow: "0 8px 24px rgba(38,32,25,0.12)" }}
+                  >
+                  <button
+                    onClick={() => {
+                      setShowQR(true);
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors flex items-center gap-2"
+                    style={{ color: COL.accent }}
+                  >
+                    Neues Gerät einrichten
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowBackups(true);
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.ink }}
+                  >
+                    Sicherungen ({backups.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowVersionRecovery(true);
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.ink }}
+                  >
+                    Cloud-Verlauf durchsuchen
+                  </button>
+                  <div style={{ borderTop: `1px solid ${COL.line}` }} />
+                  <button
+                    onClick={() => {
+                      resetStockToZero();
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.ink }}
+                  >
+                    Bestände auf 0 setzen
+                  </button>
+                  <button
+                    onClick={() => {
+                      resetToDefaults();
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.ink }}
+                  >
+                    Auf Ausgangsstand zurücksetzen
+                  </button>
+                  <div style={{ borderTop: `1px solid ${COL.line}` }} />
+                  <button
+                    onClick={() => {
+                      disconnect();
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.warn }}
+                  >
+                    Verbindung trennen
+                  </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {showQR && (
+            <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
+                  Neues Gerät einrichten
+                </h3>
+                <button onClick={() => setShowQR(false)} style={{ color: COL.inkMuted }}>
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-sm mb-3" style={{ color: COL.inkMuted }}>
+                Scan diesen Code mit der Kamera deines neuen Handys/Laptops (Safari/Chrome-App reicht) – das Gerät richtet sich
+                dann automatisch ein, ganz ohne Code abzutippen.
+              </p>
+              <div className="flex flex-col items-center gap-3">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(makeSetupUrl(config.apiKey, config.binId))}`}
+                  alt="QR-Code zum Einrichten"
+                  width={240}
+                  height={240}
+                  style={{ borderRadius: 8, border: `1px solid ${COL.line}` }}
+                />
+                <p className="text-xs text-center" style={{ color: COL.inkMuted, maxWidth: 320 }}>
+                  Geht die Kamera nicht? Kopier stattdessen diesen Link und öffne ihn auf dem anderen Gerät:
+                </p>
+                <input
+                  readOnly
+                  value={makeSetupUrl(config.apiKey, config.binId)}
+                  onFocus={(e) => e.target.select()}
+                  style={{ ...inputStyle, width: "100%", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}
+                />
+                <p className="text-xs text-center" style={{ color: COL.warn, maxWidth: 320 }}>
+                  Achtung: Wer diesen Code/Link hat, kann auf deine Daten zugreifen – nur mit deinen eigenen Geräten teilen.
+                </p>
+              </div>
+            </div>
+          )}
+        </header>
+
+        {showVersionRecovery && (
+          <VersionRecoveryPanel
+            config={config}
+            onClose={() => setShowVersionRecovery(false)}
+            onRestore={(record) => {
+              if (record.materials) setMaterials(record.materials);
+              if (record.recipes) setRecipes(record.recipes);
+              if (record.columnMap) setColumnMap(record.columnMap);
+              setShowVersionRecovery(false);
+            }}
+          />
+        )}
+
+        {showBackups && (
+          <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
+                Automatische Sicherungen
+              </h3>
+              <button onClick={() => setShowBackups(false)} style={{ color: COL.inkMuted }}>
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs mb-3" style={{ color: COL.inkMuted }}>
+              Einmal täglich beim ersten Öffnen wird automatisch eine Sicherung angelegt, zusätzlich beim Schließen/Tab-Wechsel (die letzten {5} Stände, um die Speichergröße klein zu halten).
+            </p>
+            {backups.length === 0 ? (
+              <p className="text-sm" style={{ color: COL.inkMuted }}>
+                Noch keine Sicherung vorhanden – wird beim nächsten Schließen der App angelegt.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {backups.map((b, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-sm px-3 py-2 rounded-lg"
+                    style={{ border: `1px solid ${COL.line}` }}
+                  >
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {new Date(b.timestamp).toLocaleString("de-DE")}
+                    </span>
+                    <button
+                      onClick={() => restoreBackup(b)}
+                      className="text-xs font-medium px-2.5 py-1.5 rounded-lg"
+                      style={{ border: `1px solid ${COL.accent}`, color: COL.accent }}
+                    >
+                      Wiederherstellen
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {syncState === "error" && syncErrorDetail && (
+          <div
+            className="flex items-start gap-2 text-sm px-4 py-3 rounded-lg mb-6"
+            style={{ backgroundColor: COL.warnSoft, color: COL.warn }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <span className="font-semibold">Speichern fehlgeschlagen: </span>
+              {syncErrorDetail}
+            </div>
+          </div>
+        )}
+
+        {lowStock.length > 0 && (
+          <div
+            className="flex items-start gap-2 text-sm px-4 py-3 rounded-lg mb-6"
+            style={{ backgroundColor: COL.warnSoft, color: COL.warn }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <span className="font-semibold">Bestand knapp: </span>
+              {lowStock.map((m) => `${m.name} (${fmtNum(m.stock)} ${m.unit})`).join(", ")}
+            </div>
+          </div>
+        )}
+
+        <nav
+          className="flex flex-wrap gap-1 mb-6 p-1 rounded-xl w-fit"
+          style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}
+        >
+          <TabButton active={tab === "rohstoffe"} onClick={() => setTab("rohstoffe")} icon={Package}>
+            Rohstoffe
+          </TabButton>
+          <TabButton active={tab === "rezepte"} onClick={() => setTab("rezepte")} icon={ChefHat}>
+            Rezepte
+          </TabButton>
+          <TabButton active={tab === "kalkulation"} onClick={() => setTab("kalkulation")} icon={Calculator}>
+            Kalkulation
+          </TabButton>
+          <TabButton active={tab === "etikett"} onClick={() => setTab("etikett")} icon={Tag}>
+            Etikett
+          </TabButton>
+          <TabButton active={tab === "bestellung"} onClick={() => setTab("bestellung")} icon={ShoppingCart}>
+            Bestellung
+          </TabButton>
+        </nav>
+
+        {tab === "rohstoffe" && <RohstoffeTab materials={materials} setMaterials={setMaterials} />}
+        {tab === "rezepte" && (
+          <RezepteTab materials={materials} recipes={recipes} setRecipes={setRecipes} />
+        )}
+        {tab === "kalkulation" && (
+          <KalkulationTab
+            materials={materials}
+            setMaterials={setMaterials}
+            recipes={recipes}
+            orderHistory={orderHistory}
+            setOrderHistory={setOrderHistory}
+          />
+        )}
+        {tab === "etikett" && <EtikettTab materials={materials} recipes={recipes} />}
+        {tab === "bestellung" && (
+          <BestellungTab
+            materials={materials}
+            setMaterials={setMaterials}
+            recipes={recipes}
+            setRecipes={setRecipes}
+            columnMap={columnMap}
+            setColumnMap={setColumnMap}
+            orderHistory={orderHistory}
+            setOrderHistory={setOrderHistory}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Rohstoffe Tab ----------
+function loadPicture(file) {
+  if (window.createImageBitmap) {
+    return createImageBitmap(file).catch(() => loadPictureViaImageElement(file));
+  }
+  return loadPictureViaImageElement(file);
+}
+function loadPictureViaImageElement(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Bildformat wird von diesem Browser nicht unterstützt (evtl. HEIC). Bitte als JPEG/PNG exportieren oder direkt fotografieren."));
+    };
+    img.src = url;
+  });
+}
+async function preprocessImage(file) {
+  const pic = await loadPicture(file);
+  const srcW = pic.width,
+    srcH = pic.height;
+  const targetWidth = 1800;
+  const scale = Math.max(1, targetWidth / srcW);
+  const w = Math.round(srcW * scale);
+  const h = Math.round(srcH * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(pic, 0, 0, w, h);
+  if (pic.close) pic.close();
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const contrast = 1.5;
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    let v = (gray - 128) * contrast + 128 + 15;
+    v = Math.max(0, Math.min(255, v));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Canvas konnte kein Bild erzeugen"))), "image/png");
+  });
+}
+
+function ensureTesseractLoaded() {
+  return new Promise((resolve, reject) => {
+    if (window.Tesseract) return resolve();
+    const existing = document.querySelector('script[data-tesseract-loader]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Tesseract laden fehlgeschlagen")));
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.setAttribute("data-tesseract-loader", "1");
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Tesseract laden fehlgeschlagen"));
+    document.head.appendChild(s);
+  });
+}
+
+// ---------- Rechnung scannen ----------
+function InvoiceScanPanel({ materials, setMaterials, onClose }) {
+  const [status, setStatus] = useState("idle"); // idle | scanning | done | error
+  const [progress, setProgress] = useState(0);
+  const [items, setItems] = useState([]);
+  const [rawText, setRawText] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [debugInfo, setDebugInfo] = useState("");
+  const fileInputRef = React.useRef(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStatus("preparing");
+    setProgress(0);
+    setErrorMsg("");
+    setDebugInfo("");
+    const withTimeout = (promise, ms, label) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Zeitüberschreitung bei: ${label}`)), ms)),
+      ]);
+    try {
+      let processedBlob;
+      try {
+        processedBlob = await withTimeout(preprocessImage(file), 15000, "Bildvorbereitung");
+      } catch (err) {
+        setDebugInfo("Bildvorbereitung fehlgeschlagen: " + (err?.message || String(err)));
+        processedBlob = file; // Fallback: Original-Datei direkt verwenden
+      }
+      setStatus("scanning");
+      await withTimeout(ensureTesseractLoaded(), 20000, "Tesseract laden");
+      const worker = await withTimeout(
+        Tesseract.createWorker("deu", 1, {
+          logger: (m) => {
+            if (m.status === "recognizing text") setProgress(Math.round(m.progress * 100));
+          },
+        }),
+        30000,
+        "Worker erstellen"
+      );
+      await worker.setParameters({ tessedit_pageseg_mode: "6" });
+      const result = await withTimeout(worker.recognize(processedBlob), 60000, "Texterkennung");
+      await worker.terminate();
+      setRawText(result.data.text);
+      const parsed = parseInvoiceText(result.data.text, materials);
+      setItems(parsed);
+      setStatus(parsed.length > 0 ? "done" : "error");
+      if (parsed.length === 0) setErrorMsg("Es konnten keine Zeilen mit Namen + Preis erkannt werden. Roh-Text unten prüfen.");
+    } catch (err) {
+      setStatus("error");
+      setErrorMsg("Texterkennung fehlgeschlagen.");
+      setDebugInfo((prev) => (prev ? prev + " | " : "") + (err?.message || String(err)));
+    }
+  };
+
+  const updateItem = (id, patch) => setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+
+  const applyChanges = () => {
+    const toApply = items.filter((it) => (it.uebernehmenPreis || it.uebernehmenMenge) && it.materialId);
+    if (toApply.length === 0) return;
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const match = toApply.find((it) => it.materialId === m.id);
+        if (!match) return m;
+        let updated = { ...m };
+        if (match.uebernehmenPreis) {
+          const priceG = match.preis / 1000; // erkannter Preis gilt als Preis pro kg
+          updated.price = Math.round(priceG * 10000) / 10000;
+        }
+        if (match.uebernehmenMenge && match.mengeGekauft) {
+          const converted = convertQty(match.mengeGekauft, match.mengeEinheit, m.unit);
+          if (converted != null) {
+            updated.stock = Math.round((m.stock + converted) * 1000) / 1000;
+          }
+        }
+        return updated;
+      })
+    );
+    onClose();
+  };
+
+  return (
+    <div className="mb-5 p-4 rounded-lg" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
+          Rechnung scannen
+        </h3>
+        <button onClick={onClose} style={{ color: COL.inkMuted }}>
+          <X size={16} />
+        </button>
+      </div>
+
+      {status === "idle" && (
+        <div>
+          <p className="text-sm mb-3" style={{ color: COL.inkMuted }}>
+            Foto der Rechnung aufnehmen oder aus der Galerie wählen. Preise und Rohstoffe werden danach zur Kontrolle angezeigt,
+            bevor irgendetwas übernommen wird.
+          </p>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="text-sm font-medium px-3 py-2 rounded-lg"
+            style={{ backgroundColor: COL.accent, color: "#fff" }}
+          >
+            Rechnungsfoto auswählen
+          </button>
+        </div>
+      )}
+
+      {status === "preparing" && (
+        <div className="text-sm" style={{ color: COL.inkMuted }}>
+          Bild wird für die Erkennung optimiert…
+        </div>
+      )}
+
+      {status === "scanning" && (
+        <div className="text-sm" style={{ color: COL.inkMuted }}>
+          Texterkennung läuft… {progress}%
+        </div>
+      )}
+
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+            {errorMsg}
+          </div>
+          {debugInfo && (
+            <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: COL.bg, color: COL.inkMuted, fontFamily: "'IBM Plex Mono', monospace" }}>
+              Technische Details: {debugInfo}
+            </div>
+          )}
+          {rawText && (
+            <details className="text-xs" style={{ color: COL.inkMuted }}>
+              <summary>Erkannter Roh-Text anzeigen</summary>
+              <pre className="whitespace-pre-wrap mt-2">{rawText}</pre>
+            </details>
+          )}
+          <button onClick={() => setStatus("idle")} className="text-sm font-medium underline w-fit" style={{ color: COL.accent }}>
+            Erneut versuchen
+          </button>
+        </div>
+      )}
+
+      {status === "done" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs" style={{ color: COL.inkMuted }}>
+            {items.length} Zeile(n) erkannt. Nicht sicher zugeordnete Rohstoffe sind mit ⚠ markiert – bitte manuell auswählen oder
+            abhaken, um sie zu überspringen. "Preis" gilt als Preis pro kg und wird automatisch auf Preis/g umgerechnet.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                  {["", "Erkannter Text", "Preis/kg (€)", "", "Menge gekauft", "", "Rohstoff", ""].map((h, i) => (
+                    <th
+                      key={i}
+                      className="text-left py-1.5 px-2 font-medium"
+                      style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                    <td className="py-1.5 px-2">
+                      <input
+                        type="checkbox"
+                        checked={it.uebernehmenPreis}
+                        onChange={(e) => updateItem(it.id, { uebernehmenPreis: e.target.checked })}
+                        title="Preis übernehmen"
+                      />
+                    </td>
+                    <td className="py-1.5 px-2 text-xs" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {it.erkannterName}
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <input
+                        style={{ ...inputStyle, width: 80, padding: "4px 8px" }}
+                        type="number"
+                        step="0.01"
+                        value={it.preis}
+                        onChange={(e) => updateItem(it.id, { preis: Number(e.target.value) })}
+                      />
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <input
+                        type="checkbox"
+                        checked={it.uebernehmenMenge}
+                        onChange={(e) => updateItem(it.id, { uebernehmenMenge: e.target.checked })}
+                        title="Bestand erhöhen"
+                      />
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          style={{ ...inputStyle, width: 70, padding: "4px 8px" }}
+                          type="number"
+                          step="0.01"
+                          placeholder="–"
+                          value={it.mengeGekauft ?? ""}
+                          onChange={(e) => updateItem(it.id, { mengeGekauft: e.target.value === "" ? null : Number(e.target.value) })}
+                        />
+                        <select
+                          style={{ ...inputStyle, padding: "4px 4px", width: 60 }}
+                          value={it.mengeEinheit || "kg"}
+                          onChange={(e) => updateItem(it.id, { mengeEinheit: e.target.value })}
+                        >
+                          {UNITS.map((u) => (
+                            <option key={u} value={u.toLowerCase()}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <select
+                        style={{ ...inputStyle, padding: "4px 8px", fontFamily: "'IBM Plex Sans', sans-serif" }}
+                        value={it.materialId}
+                        onChange={(e) => updateItem(it.id, { materialId: e.target.value })}
+                      >
+                        <option value="">– auswählen –</option>
+                        {materials.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="py-1.5 px-2">
+                      {!it.materialId && (
+                        <span title="Kein Rohstoff zugeordnet" style={{ color: COL.warn }}>
+                          <AlertTriangle size={16} />
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <details className="text-xs" style={{ color: COL.inkMuted }}>
+            <summary>Erkannter Roh-Text anzeigen</summary>
+            <pre className="whitespace-pre-wrap mt-2">{rawText}</pre>
+          </details>
+          <div className="flex gap-2">
+            <button onClick={applyChanges} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+              Ausgewählte Preise & Mengen übernehmen
+            </button>
+            <button onClick={onClose} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RohstoffeTab({ materials, setMaterials }) {
+  const emptyForm = { name: "", price: "", priceKg: "", unit: "g", stock: "", mindestbestand: "", zusatzstoffe: "", allergene: [] };
+  const [form, setForm] = useState(null);
+  const [search, setSearch] = useState("");
+  const [showScan, setShowScan] = useState(false);
+  const [showPriceImport, setShowPriceImport] = useState(false);
+  const filteredMaterials = useMemo(
+    () => materials.filter((m) => m.name.toLowerCase().includes(search.toLowerCase())),
+    [materials, search]
+  );
+
+  const startAdd = () => setForm({ ...emptyForm });
+  const startEdit = (m) =>
+    setForm({
+      ...m,
+      price: String(m.price),
+      priceKg: String(Math.round((m.price || 0) * 1000 * 10000) / 10000),
+      stock: String(m.stock),
+      mindestbestand: String(m.mindestbestand ?? 0),
+    });
+  const cancel = () => setForm(null);
+
+  const setPriceG = (value) =>
+    setForm({
+      ...form,
+      price: value,
+      priceKg: value === "" ? "" : String(Math.round((Number(value) || 0) * 1000 * 10000) / 10000),
+    });
+  const setPriceKg = (value) =>
+    setForm({
+      ...form,
+      priceKg: value,
+      price: value === "" ? "" : String(Math.round(((Number(value) || 0) / 1000) * 10000) / 10000),
+    });
+
+  const save = () => {
+    if (!form.name.trim()) return;
+    const clean = {
+      ...form,
+      price: Number(form.price) || 0,
+      stock: Number(form.stock) || 0,
+      mindestbestand: Number(form.mindestbestand) || 0,
+    };
+    delete clean.priceKg;
+    if (form.id) {
+      setMaterials((prev) => prev.map((m) => (m.id === form.id ? clean : m)));
+    } else {
+      setMaterials((prev) => [...prev, { ...clean, id: uid() }]);
+    }
+    setForm(null);
+  };
+
+  const remove = (id) => setMaterials((prev) => prev.filter((m) => m.id !== id));
+
+  const formPanel = !form ? null : (
+    <div className="mb-1 p-4 rounded-lg" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-3">
+        <Field label="Name">
+          <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </Field>
+        <Field label="Preis pro g (€)">
+          <input style={inputStyle} type="number" step="0.0001" value={form.price} onChange={(e) => setPriceG(e.target.value)} />
+        </Field>
+        <Field label="Preis pro kg (€)">
+          <input style={inputStyle} type="number" step="0.01" value={form.priceKg} onChange={(e) => setPriceKg(e.target.value)} />
+        </Field>
+        <Field label="Einheit">
+          <select style={inputStyle} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
+            {UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Lagerbestand">
+          <input
+            style={inputStyle}
+            type="number"
+            step="0.01"
+            value={form.stock}
+            onChange={(e) => setForm({ ...form, stock: e.target.value })}
+          />
+        </Field>
+        <Field label="Mindestbestand (Warnschwelle)">
+          <input
+            style={inputStyle}
+            type="number"
+            step="0.01"
+            value={form.mindestbestand}
+            onChange={(e) => setForm({ ...form, mindestbestand: e.target.value })}
+            placeholder="0 = keine Warnung"
+          />
+        </Field>
+      </div>
+      <div className="mb-3">
+        <Field label="Zusatzstoffe (z.B. Konservierungsstoff E202)">
+          <input style={inputStyle} value={form.zusatzstoffe} onChange={(e) => setForm({ ...form, zusatzstoffe: e.target.value })} />
+        </Field>
+      </div>
+      <div className="mb-4">
+        <span className="text-sm block mb-1.5" style={{ color: COL.inkMuted }}>
+          Allergene
+        </span>
+        <AllergenPicker selected={form.allergene} onChange={(a) => setForm({ ...form, allergene: a })} />
+      </div>
+      <div className="flex gap-2">
+        <button onClick={save} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+          Speichern
+        </button>
+        <button onClick={cancel} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+            Lagerliste
+          </h2>
+          {!form && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowScan(true)}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ border: `1px solid ${COL.accent}`, color: COL.accent }}
+              >
+                <Tag size={15} /> Rechnung scannen
+              </button>
+              <button
+                onClick={() => setShowPriceImport(true)}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ border: `1px solid ${COL.accent}`, color: COL.accent }}
+              >
+                <Pencil size={15} /> Preise & Allergene
+              </button>
+              <button
+                onClick={startAdd}
+                className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ backgroundColor: COL.accent, color: "#fff" }}
+              >
+                <Plus size={15} /> Neuer Rohstoff
+              </button>
+            </div>
+          )}
+        </div>
+
+        {showScan && <InvoiceScanPanel materials={materials} setMaterials={setMaterials} onClose={() => setShowScan(false)} />}
+        {showPriceImport && (
+          <PreiseImportPanel materials={materials} setMaterials={setMaterials} onClose={() => setShowPriceImport(false)} />
+        )}
+
+        {!form && materials.length > 5 && (
+          <input
+            style={{ ...inputStyle, marginBottom: 14, width: "100%", maxWidth: 320 }}
+            placeholder="Rohstoff suchen…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
+
+        {form && !form.id && <div className="mb-5">{formPanel}</div>}
+
+        {materials.length === 0 ? (
+          <p className="text-sm py-8 text-center" style={{ color: COL.inkMuted }}>
+            Noch keine Rohstoffe erfasst.
+          </p>
+        ) : filteredMaterials.length === 0 ? (
+          <p className="text-sm py-8 text-center" style={{ color: COL.inkMuted }}>
+            Kein Rohstoff gefunden für "{search}".
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                  {["Name", "Preis", "Einheit", "Bestand", "Mind.", "Zusatzstoffe", "Allergene", ""].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left py-2 px-2 font-medium"
+                      style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMaterials.map((m) =>
+                  form && form.id === m.id ? (
+                    <tr key={m.id}>
+                      <td colSpan={8} className="py-2">
+                        {formPanel}
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={m.id} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                      <td className="py-2 px-2" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                        {m.name}
+                        {m.vorteig && (
+                          <span
+                            className="text-xs ml-2 px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: COL.accentSoft, color: COL.accent }}
+                            title="Wird bei der Kalkulation automatisch in Mehl + Wasser aufgelöst"
+                          >
+                            Vorteig (auto)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2">{fmtEUR(m.price)}</td>
+                      <td className="py-2 px-2">{m.unit}</td>
+                      <td
+                        className="py-2 px-2"
+                        style={{
+                          color: m.mindestbestand > 0 && m.stock <= m.mindestbestand ? COL.warn : COL.ink,
+                          fontWeight: m.mindestbestand > 0 && m.stock <= m.mindestbestand ? 600 : 400,
+                        }}
+                      >
+                        {fmtNum(m.stock)}
+                      </td>
+                      <td className="py-2 px-2 text-xs" style={{ color: COL.inkMuted }}>
+                        {m.mindestbestand > 0 ? fmtNum(m.mindestbestand) : "–"}
+                      </td>
+                      <td className="py-2 px-2 text-xs" style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COL.inkMuted }}>
+                        {m.zusatzstoffe || "–"}
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="flex flex-wrap gap-1">
+                          {m.allergene.length === 0 ? (
+                            <span className="text-xs" style={{ color: COL.inkMuted }}>
+                              –
+                            </span>
+                          ) : (
+                            m.allergene.map((a) => (
+                              <span
+                                key={a}
+                                className="text-xs px-1.5 py-0.5 rounded-full"
+                                style={{ backgroundColor: COL.amberSoft, color: COL.amber, fontFamily: "'IBM Plex Sans', sans-serif" }}
+                              >
+                                {allergenLabel(a)}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="flex gap-2">
+                          <button onClick={() => startEdit(m)} style={{ color: COL.inkMuted }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => remove(m.id)} style={{ color: COL.warn }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------- Rezepte Tab ----------
+function RezepteTab({ materials, recipes, setRecipes }) {
+  const emptyForm = { name: "", kategorie: "", ausbringungMenge: "", ausbringungEinheit: "Stk", items: [] };
+  const categories = useMemo(
+    () => [...new Set(recipes.map((r) => r.kategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
+    [recipes]
+  );
+  const [filterKategorie, setFilterKategorie] = useState("Alle");
+  const visibleRecipes = filterKategorie === "Alle" ? recipes : recipes.filter((r) => r.kategorie === filterKategorie);
+  const [form, setForm] = useState(null);
+
+  const startAdd = () => setForm({ ...emptyForm, items: [{ materialId: materials[0]?.id ?? "", menge: "" }] });
+  const startEdit = (r) =>
+    setForm({ ...r, ausbringungMenge: String(r.ausbringungMenge), items: r.items.map((i) => ({ ...i, menge: String(i.menge) })) });
+  const cancel = () => setForm(null);
+
+  const addRow = () => setForm({ ...form, items: [...form.items, { materialId: materials[0]?.id ?? "", menge: "" }] });
+  const removeRow = (idx) => setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
+  const updateRow = (idx, patch) =>
+    setForm({ ...form, items: form.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) });
+
+  const save = () => {
+    if (!form.name.trim() || form.items.length === 0) return;
+    const clean = {
+      ...form,
+      ausbringungMenge: Number(form.ausbringungMenge) || 0,
+      items: form.items
+        .filter((i) => i.materialId)
+        .map((i) => ({ materialId: i.materialId, menge: Number(i.menge) || 0 })),
+    };
+    if (form.id) {
+      setRecipes((prev) => prev.map((r) => (r.id === form.id ? clean : r)));
+    } else {
+      setRecipes((prev) => [...prev, { ...clean, id: uid() }]);
+    }
+    setForm(null);
+  };
+
+  const remove = (id) => setRecipes((prev) => prev.filter((r) => r.id !== id));
+  const matName = (id) => materials.find((m) => m.id === id)?.name ?? "(gelöschter Rohstoff)";
+  const matUnit = (id) => materials.find((m) => m.id === id)?.unit ?? "";
+
+  const formPanel = !form ? null : (
+    <div className="mb-5 p-4 rounded-lg" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+        <Field label="Rezeptname">
+          <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </Field>
+        <Field label="Kategorie">
+          <input
+            style={inputStyle}
+            list="kategorie-liste"
+            value={form.kategorie}
+            onChange={(e) => setForm({ ...form, kategorie: e.target.value })}
+            placeholder="z.B. Brot"
+          />
+          <datalist id="kategorie-liste">
+            {categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label="Ausbringung (Menge)">
+          <input
+            style={inputStyle}
+            type="number"
+            step="0.01"
+            value={form.ausbringungMenge}
+            onChange={(e) => setForm({ ...form, ausbringungMenge: e.target.value })}
+          />
+        </Field>
+        <Field label="Einheit der Ausbringung">
+          <select
+            style={inputStyle}
+            value={form.ausbringungEinheit}
+            onChange={(e) => setForm({ ...form, ausbringungEinheit: e.target.value })}
+          >
+            {[...UNITS, "Portion(en)"].map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <span className="text-sm block mb-2" style={{ color: COL.inkMuted }}>
+        Zutaten (pro Ansatz)
+      </span>
+      <div className="flex flex-col gap-2 mb-3">
+        {form.items.map((it, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <select
+              style={{ ...inputStyle, flex: 2 }}
+              value={it.materialId}
+              onChange={(e) => updateRow(idx, { materialId: e.target.value })}
+            >
+              {materials.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <input
+              style={{ ...inputStyle, flex: 1 }}
+              type="number"
+              step="0.001"
+              placeholder="Menge"
+              value={it.menge}
+              onChange={(e) => updateRow(idx, { menge: e.target.value })}
+            />
+            <span className="text-xs w-8" style={{ color: COL.inkMuted }}>
+              {matUnit(it.materialId)}
+            </span>
+            <button onClick={() => removeRow(idx)} style={{ color: COL.warn }}>
+              <X size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button onClick={addRow} className="text-sm font-medium mb-4 flex items-center gap-1" style={{ color: COL.accent }}>
+        <Plus size={14} /> Zutat hinzufügen
+      </button>
+
+      <div className="flex gap-2">
+        <button onClick={save} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+          Speichern
+        </button>
+        <button onClick={cancel} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+            Rezepte
+          </h2>
+          {!form && materials.length > 0 && (
+            <button
+              onClick={startAdd}
+              className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ backgroundColor: COL.accent, color: "#fff" }}
+            >
+              <Plus size={15} /> Neues Rezept
+            </button>
+          )}
+        </div>
+
+        {form && !form.id && formPanel}
+
+        {recipes.length > 0 && categories.length > 0 && (
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-sm" style={{ color: COL.inkMuted }}>
+              Kategorie:
+            </span>
+            <select style={{ ...inputStyle, maxWidth: 220 }} value={filterKategorie} onChange={(e) => setFilterKategorie(e.target.value)}>
+              <option value="Alle">Alle ({recipes.length})</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c} ({recipes.filter((r) => r.kategorie === c).length})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {recipes.length === 0 ? (
+          <p className="text-sm py-8 text-center" style={{ color: COL.inkMuted }}>
+            Noch keine Rezepte erfasst.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {visibleRecipes.map((r) =>
+              form && form.id === r.id ? (
+                <div key={r.id}>{formPanel}</div>
+              ) : (
+                <div key={r.id} className="p-4 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="font-medium" style={{ fontFamily: "'Fraunces', serif" }}>
+                        {r.name}
+                      </span>
+                      {r.kategorie && (
+                        <span
+                          className="text-xs ml-2 px-1.5 py-0.5 rounded-full"
+                          style={{ backgroundColor: COL.accentSoft, color: COL.accent }}
+                        >
+                          {r.kategorie}
+                        </span>
+                      )}
+                      <span className="text-xs ml-2" style={{ color: COL.inkMuted }}>
+                        ergibt {fmtNum(r.ausbringungMenge)} {r.ausbringungEinheit}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => startEdit(r)} style={{ color: COL.inkMuted }}>
+                        <Pencil size={14} />
+                      </button>
+                      <button onClick={() => remove(r.id)} style={{ color: COL.warn }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="text-sm flex flex-col gap-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", color: COL.inkMuted }}>
+                    {r.items.map((it, i) => (
+                      <li key={i}>
+                        {fmtNum(it.menge)} {matUnit(it.materialId)} — {matName(it.materialId)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------- Kalkulation Tab ----------
+function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrderHistory }) {
+  const [mode, setMode] = useState("rezept"); // rezept | direkt
+  const [recipeId, setRecipeId] = useState(recipes[0]?.id ?? "");
+  const [targetQty, setTargetQty] = useState("");
+  const [applied, setApplied] = useState(false);
+  const [direktRows, setDirektRows] = useState([{ id: uid(), materialId: materials[0]?.id ?? "", menge: "" }]);
+
+  const recipe = recipes.find((r) => r.id === recipeId);
+  const scale = recipe && Number(targetQty) > 0 && recipe.ausbringungMenge > 0 ? Number(targetQty) / recipe.ausbringungMenge : 0;
+
+  const rows = useMemo(() => {
+    if (!recipe) return [];
+    const expandedItems = expandVorteige(recipe.items, materials);
+    return expandedItems.map((it) => {
+      const mat = materials.find((m) => m.id === it.materialId);
+      const needed = it.menge * scale;
+      const cost = mat ? needed * mat.price : 0;
+      const enough = mat ? mat.stock >= needed : false;
+      return { materialId: it.materialId, mat, needed, cost, enough };
+    });
+  }, [recipe, materials, scale]);
+
+  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+  const anyMissing = rows.some((r) => !r.enough);
+
+  const addDirektRow = () => setDirektRows([...direktRows, { id: uid(), materialId: materials[0]?.id ?? "", menge: "" }]);
+  const removeDirektRow = (id) => setDirektRows(direktRows.filter((r) => r.id !== id));
+  const updateDirektRow = (id, patch) => setDirektRows(direktRows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const direktConsolidated = useMemo(() => {
+    return direktRows
+      .filter((r) => r.materialId && Number(r.menge) > 0)
+      .map((r) => {
+        const mat = materials.find((m) => m.id === r.materialId);
+        const needed = Number(r.menge);
+        return { materialId: r.materialId, mat, needed, enough: mat ? mat.stock >= needed : false };
+      });
+  }, [direktRows, materials]);
+
+  const logHistory = (label, items) => {
+    const historyEntry = {
+      id: uid(),
+      appliedAt: new Date().toISOString(),
+      label,
+      items: items.map((it) => ({ materialId: it.materialId, needed: it.needed })),
+    };
+    setOrderHistory((prev) => [historyEntry, ...prev].slice(0, 50));
+  };
+
+  const applyRezeptAbzug = () => {
+    if (rows.length === 0) return;
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const r = rows.find((r) => r.materialId === m.id);
+        return r ? { ...m, stock: Math.round((m.stock - r.needed) * 1000) / 1000 } : m;
+      })
+    );
+    logHistory(`Gebacken: ${recipe.name} (${fmtNum(Number(targetQty))} ${recipe.ausbringungEinheit})`, rows);
+    setApplied(true);
+  };
+
+  const applyDirektAbzug = () => {
+    if (direktConsolidated.length === 0) return;
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const r = direktConsolidated.find((r) => r.materialId === m.id);
+        return r ? { ...m, stock: Math.round((m.stock - r.needed) * 1000) / 1000 } : m;
+      })
+    );
+    logHistory("Rohstoffe direkt abgezogen", direktConsolidated);
+    setApplied(true);
+    setDirektRows([{ id: uid(), materialId: materials[0]?.id ?? "", menge: "" }]);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+            Backen / Verbrauch buchen
+          </h2>
+          <div className="flex gap-1 p-1 rounded-lg" style={{ backgroundColor: COL.bg }}>
+            <button
+              onClick={() => {
+                setMode("rezept");
+                setApplied(false);
+              }}
+              className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+              style={{ backgroundColor: mode === "rezept" ? COL.accent : "transparent", color: mode === "rezept" ? "#fff" : COL.inkMuted }}
+            >
+              Nach Rezept
+            </button>
+            <button
+              onClick={() => {
+                setMode("direkt");
+                setApplied(false);
+              }}
+              className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+              style={{ backgroundColor: mode === "direkt" ? COL.accent : "transparent", color: mode === "direkt" ? "#fff" : COL.inkMuted }}
+            >
+              Rohstoffe direkt
+            </button>
+          </div>
+        </div>
+
+        {mode === "rezept" && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+            <Field label="Rezept">
+              <select
+                style={inputStyle}
+                value={recipeId}
+                onChange={(e) => {
+                  setRecipeId(e.target.value);
+                  setApplied(false);
+                }}
+              >
+                {groupByKategorie(recipes).map((g) => (
+                  <optgroup key={g.kategorie} label={g.kategorie}>
+                    {g.items.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
+            <Field label={`Produzierte Menge${recipe ? " (" + recipe.ausbringungEinheit + ")" : ""}`}>
+              <input
+                style={inputStyle}
+                type="number"
+                step="0.01"
+                value={targetQty}
+                onChange={(e) => {
+                  setTargetQty(e.target.value);
+                  setApplied(false);
+                }}
+                placeholder={recipe ? `z.B. ${recipe.ausbringungMenge}` : ""}
+              />
+            </Field>
+          </div>
+        )}
+
+        {mode === "direkt" && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm mb-1" style={{ color: COL.inkMuted }}>
+              Rohstoff(e) und verbrauchte Menge direkt eintragen, ohne über ein Rezept zu rechnen.
+            </p>
+            {direktRows.map((row) => (
+              <div key={row.id} className="flex items-center gap-2">
+                <select
+                  style={{ ...inputStyle, flex: 2 }}
+                  value={row.materialId}
+                  onChange={(e) => {
+                    updateDirektRow(row.id, { materialId: e.target.value });
+                    setApplied(false);
+                  }}
+                >
+                  {materials.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  style={{ ...inputStyle, flex: 1 }}
+                  type="number"
+                  step="0.01"
+                  placeholder="Menge"
+                  value={row.menge}
+                  onChange={(e) => {
+                    updateDirektRow(row.id, { menge: e.target.value });
+                    setApplied(false);
+                  }}
+                />
+                <span className="text-xs w-8" style={{ color: COL.inkMuted }}>
+                  {materials.find((m) => m.id === row.materialId)?.unit || ""}
+                </span>
+                <button onClick={() => removeDirektRow(row.id)} style={{ color: COL.warn }}>
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+            <button onClick={addDirektRow} className="text-sm font-medium mt-1 flex items-center gap-1 w-fit" style={{ color: COL.accent }}>
+              <Plus size={14} /> Weiterer Rohstoff
+            </button>
+          </div>
+        )}
+      </Card>
+
+      {mode === "rezept" && recipe && scale > 0 && (
+        <Card>
+          <div className="overflow-x-auto mb-4">
+            <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                  {["Rohstoff", "Benötigt", "Lager", "Status", "Kosten"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left py-2 px-2 font-medium"
+                      style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                    <td className="py-2 px-2" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {r.mat?.name ?? "(gelöscht)"}
+                    </td>
+                    <td className="py-2 px-2">
+                      {fmtNum(r.needed)} {r.mat?.unit}
+                    </td>
+                    <td className="py-2 px-2">
+                      {fmtNum(r.mat?.stock ?? 0)} {r.mat?.unit}
+                    </td>
+                    <td className="py-2 px-2">
+                      {r.enough ? (
+                        <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full w-fit" style={{ backgroundColor: COL.okSoft, color: COL.ok, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                          <CheckCircle2 size={12} /> genug
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full w-fit" style={{ backgroundColor: COL.warnSoft, color: COL.warn, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                          <AlertTriangle size={12} /> fehlen {fmtNum(r.needed - (r.mat?.stock ?? 0))} {r.mat?.unit}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-2">{fmtEUR(r.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} className="py-3 px-2 text-right font-medium" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                    Gesamtkosten Rohstoffe
+                  </td>
+                  <td className="py-3 px-2 font-semibold" style={{ fontSize: "15px" }}>
+                    {fmtEUR(totalCost)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          {anyMissing ? (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg mb-3" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+              <AlertTriangle size={16} /> Für diese Menge reicht der Lagerbestand nicht bei allen Rohstoffen aus.
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg mb-3" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+              <CheckCircle2 size={16} /> Der Lagerbestand reicht für die geplante Produktion aus.
+            </div>
+          )}
+          {applied ? (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+              <CheckCircle2 size={16} /> Lagerbestand aktualisiert.
+            </div>
+          ) : (
+            <button onClick={applyRezeptAbzug} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+              Bestand jetzt abziehen
+            </button>
+          )}
+        </Card>
+      )}
+
+      {mode === "direkt" && direktConsolidated.length > 0 && (
+        <Card>
+          <div className="overflow-x-auto mb-4">
+            <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                  {["Rohstoff", "Menge", "Lager", "Nach Abzug"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left py-2 px-2 font-medium"
+                      style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {direktConsolidated.map((r, i) => (
+                  <tr key={i} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                    <td className="py-2 px-2" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {r.mat?.name}
+                    </td>
+                    <td className="py-2 px-2">
+                      {fmtNum(r.needed)} {r.mat?.unit}
+                    </td>
+                    <td className="py-2 px-2">
+                      {fmtNum(r.mat?.stock ?? 0)} {r.mat?.unit}
+                    </td>
+                    <td
+                      className="py-2 px-2"
+                      style={{ color: !r.enough ? COL.warn : COL.ink, fontWeight: !r.enough ? 600 : 400 }}
+                    >
+                      {fmtNum((r.mat?.stock ?? 0) - r.needed)} {r.mat?.unit}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {direktConsolidated.some((r) => !r.enough) && (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg mb-3" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+              <AlertTriangle size={16} /> Für manche Rohstoffe reicht der Bestand nicht aus – der Abzug würde ins Minus gehen.
+            </div>
+          )}
+          {applied ? (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+              <CheckCircle2 size={16} /> Lagerbestand aktualisiert.
+            </div>
+          ) : (
+            <button onClick={applyDirektAbzug} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+              Bestand jetzt abziehen
+            </button>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ---------- Etikett Tab ----------
+function EtikettTab({ materials, recipes }) {
+  const [recipeId, setRecipeId] = useState(recipes[0]?.id ?? "");
+  const recipe = recipes.find((r) => r.id === recipeId);
+
+  const items = useMemo(() => {
+    if (!recipe) return [];
+    return [...recipe.items]
+      .map((it) => ({ ...it, mat: materials.find((m) => m.id === it.materialId) }))
+      .filter((it) => it.mat)
+      .sort((a, b) => b.menge - a.menge);
+  }, [recipe, materials]);
+
+  const allergenKeys = useMemo(() => {
+    const set = new Set();
+    items.forEach((it) => it.mat.allergene.forEach((a) => set.add(a)));
+    return [...set];
+  }, [items]);
+
+  const additives = items.filter((it) => it.mat.zusatzstoffe?.trim());
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <Field label="Rezept für Etikett wählen">
+          <select style={{ ...inputStyle, maxWidth: 320 }} value={recipeId} onChange={(e) => setRecipeId(e.target.value)}>
+            {groupByKategorie(recipes).map((g) => (
+              <optgroup key={g.kategorie} label={g.kategorie}>
+                {g.items.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </Field>
+      </Card>
+
+      {recipe && (
+        <div className="relative mx-auto w-full max-w-md">
+          <div
+            className="relative rounded-2xl p-6"
+            style={{ backgroundColor: "#fff", border: `2px dashed ${COL.line}` }}
+          >
+            {/* ticket notches */}
+            <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full" style={{ backgroundColor: COL.bg }} />
+            <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full" style={{ backgroundColor: COL.bg }} />
+
+            <div className="text-center mb-4">
+              <h3 className="text-xl" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
+                {recipe.name}
+              </h3>
+              <p className="text-xs" style={{ color: COL.inkMuted }}>
+                Ausbringung: {fmtNum(recipe.ausbringungMenge)} {recipe.ausbringungEinheit}
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-xs font-semibold uppercase mb-1" style={{ color: COL.inkMuted, letterSpacing: "0.05em" }}>
+                Zutaten
+              </p>
+              <p className="text-sm leading-relaxed" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                {items.map((it, i) => {
+                  const hasAllergen = it.mat.allergene.length > 0;
+                  return (
+                    <span key={i}>
+                      <span style={{ fontWeight: hasAllergen ? 700 : 400, textTransform: hasAllergen ? "uppercase" : "none" }}>
+                        {it.mat.name}
+                      </span>
+                      {it.mat.zusatzstoffe?.trim() && <span> ({it.mat.zusatzstoffe.trim()})</span>}
+                      {i < items.length - 1 ? ", " : "."}
+                    </span>
+                  );
+                })}
+              </p>
+            </div>
+
+            {allergenKeys.length > 0 && (
+              <div className="mb-3 p-3 rounded-lg" style={{ backgroundColor: COL.amberSoft }}>
+                <p className="text-xs font-semibold mb-1" style={{ color: COL.amber }}>
+                  Enthält Allergene:
+                </p>
+                <p className="text-sm font-semibold" style={{ color: COL.amber }}>
+                  {allergenKeys.map(allergenLabel).join(", ")}
+                </p>
+              </div>
+            )}
+
+            {additives.length > 0 && (
+              <div className="mb-1">
+                <p className="text-xs font-semibold uppercase mb-1" style={{ color: COL.inkMuted, letterSpacing: "0.05em" }}>
+                  Zusatzstoffe
+                </p>
+                <ul className="text-xs" style={{ color: COL.inkMuted }}>
+                  {additives.map((it, i) => (
+                    <li key={i}>
+                      {it.mat.name}: {it.mat.zusatzstoffe}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {allergenKeys.length === 0 && (
+              <p className="text-xs" style={{ color: COL.ok }}>
+                Keine deklarierten Allergene enthalten.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Bestellung: Hilfsfunktionen (Kunden-Matrix-Format) ----------
+function ensureXLSXLoaded() {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) return resolve();
+    const existing = document.querySelector('script[data-xlsx-loader]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("XLSX-Bibliothek laden fehlgeschlagen")));
+      return;
+    }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    s.setAttribute("data-xlsx-loader", "1");
+    s.crossOrigin = "anonymous";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("XLSX-Bibliothek laden fehlgeschlagen"));
+    document.head.appendChild(s);
+  });
+}
+
+function excelSerialToDate(n) {
+  return new Date(Math.round((n - 25569) * 86400 * 1000));
+}
+
+function detectOrderBlocks(rows) {
+  let headerRowIdx = -1;
+  let anchors = [];
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const row = rows[r] || [];
+    const found = [];
+    row.forEach((cell, ci) => {
+      if (String(cell).trim() === "Bauern") found.push(ci);
+    });
+    if (found.length > 0) {
+      headerRowIdx = r;
+      anchors = found;
+      break;
+    }
+  }
+  if (headerRowIdx === -1) return { blocks: [], headerRowIdx: -1 };
+  const headerRow = rows[headerRowIdx] || [];
+
+  const blocks = anchors.map((a, blockIdx) => {
+    const nameCol = a - 1;
+    const nextAnchor = anchors[blockIdx + 1];
+    const hardLimit = nextAnchor != null ? nextAnchor - 1 : headerRow.length;
+    const productCols = [];
+    const productNames = [];
+    for (let c = a; c < hardLimit; c++) {
+      const label = headerRow[c];
+      if (label === undefined || label === null || String(label).trim() === "") break;
+      productCols.push(c);
+      productNames.push(String(label).trim());
+    }
+    let date = null;
+    const lastCol = productCols.length > 0 ? productCols[productCols.length - 1] : a;
+    for (let r = 0; r < headerRowIdx && !date; r++) {
+      const row = rows[r] || [];
+      for (let c = Math.max(0, nameCol); c <= lastCol + 2; c++) {
+        const val = row[c];
+        if (val instanceof Date) {
+          date = val;
+          break;
+        }
+        if (typeof val === "number" && val > 30000 && val < 60000) {
+          date = excelSerialToDate(val);
+          break;
+        }
+        if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}/.test(val.trim())) {
+          date = new Date(val.trim());
+          break;
+        }
+      }
+    }
+    return { id: `block${blockIdx}`, nameCol, productCols, productNames, date };
+  });
+
+  return { blocks, headerRowIdx };
+}
+
+function sumOrderBlock(rows, headerRowIdx, block) {
+  const totals = {};
+  block.productNames.forEach((p) => (totals[p] = 0));
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const name = row[block.nameCol];
+    if (name === undefined || name === null || String(name).trim() === "") continue;
+    block.productCols.forEach((c, i) => {
+      const v = row[c];
+      const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+      if (isFinite(n)) totals[block.productNames[i]] += n;
+    });
+  }
+  return totals;
+}
+
+function fmtBlockDate(date) {
+  if (!date || isNaN(date.getTime())) return "unbekanntes Datum";
+  return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// ---------- Bestellung Tab ----------
+function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap, setColumnMap, orderHistory, setOrderHistory }) {
+  const [importMode, setImportMode] = useState("manuell"); // manuell | excel
+  const [status, setStatus] = useState("idle"); // idle | parsing | pick-sheet | pick-date | mapping | done | error
+  const [workbook, setWorkbook] = useState(null);
+  const [sheetName, setSheetName] = useState("");
+  const [rows, setRows] = useState([]);
+  const [blocks, setBlocks] = useState([]);
+  const [headerRowIdx, setHeaderRowIdx] = useState(-1);
+  const [selectedBlockId, setSelectedBlockId] = useState("");
+  const [totals, setTotals] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [mapping, setMapping] = useState({});
+  const [errorMsg, setErrorMsg] = useState("");
+  const [debugInfo, setDebugInfo] = useState("");
+  const fileInputRef = React.useRef(null);
+
+  const [manualRows, setManualRows] = useState([{ id: uid(), recipeId: recipes[0]?.id ?? "", menge: "" }]);
+  const [manualApplied, setManualApplied] = useState(false);
+  const addManualRow = () => setManualRows([...manualRows, { id: uid(), recipeId: recipes[0]?.id ?? "", menge: "" }]);
+  const removeManualRow = (id) => setManualRows(manualRows.filter((r) => r.id !== id));
+  const updateManualRow = (id, patch) => {
+    setManualRows(manualRows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setManualApplied(false);
+  };
+
+  const SCHWUND_G = 1500;
+  const manualConsolidated = useMemo(() => {
+    const map = new Map();
+    manualRows
+      .filter((r) => r.recipeId && Number(r.menge) > 0)
+      .forEach((r) => {
+        const recipe = recipes.find((rec) => rec.id === r.recipeId);
+        if (!recipe || !recipe.ausbringungMenge) return;
+        const scale = Number(r.menge) / recipe.ausbringungMenge;
+        const expandedItems = expandVorteige(recipe.items, materials);
+        expandedItems.forEach((it) => {
+          const needed = it.menge * scale;
+          map.set(it.materialId, (map.get(it.materialId) || 0) + needed);
+        });
+      });
+    const roggen = materials.find((m) => m.name.trim().toLowerCase() === "roggen 960");
+    const dinkel = materials.find((m) => m.name.trim().toLowerCase() === "dinkelmehl");
+    const anyRealProduct = manualRows.some((r) => r.recipeId && Number(r.menge) > 0);
+    if (anyRealProduct) {
+      if (roggen) map.set(roggen.id, (map.get(roggen.id) || 0) + SCHWUND_G);
+      if (dinkel) map.set(dinkel.id, (map.get(dinkel.id) || 0) + SCHWUND_G);
+    }
+    return [...map.entries()]
+      .map(([materialId, needed]) => {
+        const mat = materials.find((m) => m.id === materialId);
+        const isSchwund = materialId === roggen?.id || materialId === dinkel?.id;
+        return { materialId, mat, needed, resultingStock: (mat?.stock ?? 0) - needed, isSchwund };
+      })
+      .filter((c) => c.mat);
+  }, [manualRows, recipes, materials]);
+
+  const applyManualDeduction = () => {
+    if (manualConsolidated.length === 0) return;
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const c = manualConsolidated.find((c) => c.materialId === m.id);
+        return c ? { ...m, stock: Math.round((m.stock - c.needed) * 1000) / 1000 } : m;
+      })
+    );
+    const namen = manualRows
+      .filter((r) => r.recipeId && Number(r.menge) > 0)
+      .map((r) => {
+        const rec = recipes.find((rc) => rc.id === r.recipeId);
+        return `${fmtNum(Number(r.menge))} ${rec?.ausbringungEinheit ?? ""} ${rec?.name ?? ""}`;
+      })
+      .join(", ");
+    const historyEntry = {
+      id: uid(),
+      appliedAt: new Date().toISOString(),
+      label: `Bestellung: ${namen}`,
+      items: manualConsolidated.map((c) => ({ materialId: c.materialId, needed: c.needed })),
+    };
+    setOrderHistory((prev) => [historyEntry, ...prev].slice(0, 50));
+    setManualApplied(true);
+    setManualRows([{ id: uid(), recipeId: recipes[0]?.id ?? "", menge: "" }]);
+  };
+
+  const resetAll = () => {
+    setStatus("idle");
+    setWorkbook(null);
+    setSheetName("");
+    setRows([]);
+    setBlocks([]);
+    setSelectedBlockId("");
+    setTotals(null);
+    setProducts([]);
+    setErrorMsg("");
+  };
+
+  const loadSheet = (wb, sName) => {
+    const sheet = wb.Sheets[sName];
+    const r = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+    const { blocks: detected, headerRowIdx: hIdx } = detectOrderBlocks(r);
+    setRows(r);
+    setHeaderRowIdx(hIdx);
+    setBlocks(detected);
+    setSheetName(sName);
+    if (detected.length === 0) {
+      setStatus("error");
+      setErrorMsg(`Im Blatt "${sName}" konnte keine Bestell-Tabelle (Spalte "Bauern") gefunden werden.`);
+    } else {
+      setStatus("pick-date");
+    }
+  };
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStatus("parsing");
+    setErrorMsg("");
+    setDebugInfo("");
+    try {
+      await ensureXLSXLoaded();
+      let wb;
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        const text = await file.text();
+        wb = XLSX.read(text, { type: "string", cellDates: true });
+      } else {
+        const buf = await file.arrayBuffer();
+        wb = XLSX.read(buf, { type: "array", cellDates: true });
+      }
+      setWorkbook(wb);
+      if (wb.SheetNames.length === 1) {
+        loadSheet(wb, wb.SheetNames[0]);
+      } else {
+        setStatus("pick-sheet");
+      }
+    } catch (err) {
+      setStatus("error");
+      setErrorMsg("Datei konnte nicht gelesen werden.");
+      setDebugInfo(err?.message || String(err));
+    }
+  };
+
+  const chooseDate = (blockId) => {
+    setSelectedBlockId(blockId);
+    const block = blocks.find((b) => b.id === blockId);
+    const t = sumOrderBlock(rows, headerRowIdx, block);
+    setTotals(t);
+    setProducts(block.productNames);
+    const initMapping = {};
+    block.productNames.forEach((abbr) => {
+      const saved = columnMap[abbr];
+      initMapping[abbr] = {
+        recipeId: saved?.recipeId || "",
+        stueckProAnsatz: saved?.stueckProAnsatz ?? "",
+      };
+      if (!initMapping[abbr].recipeId) {
+        const { match } = findBestMatch(abbr, recipes, (r) => r.name);
+        if (match) initMapping[abbr].recipeId = match.id;
+      }
+    });
+    setMapping(initMapping);
+    setStatus("mapping");
+  };
+
+  const updateMapping = (abbr, patch) => setMapping((prev) => ({ ...prev, [abbr]: { ...prev[abbr], ...patch } }));
+
+  const consolidated = useMemo(() => {
+    if (!totals) return [];
+    const map = new Map();
+    products.forEach((abbr) => {
+      const qty = totals[abbr];
+      const m = mapping[abbr];
+      if (!qty || qty <= 0 || !m?.recipeId || !m?.stueckProAnsatz) return;
+      const recipe = recipes.find((r) => r.id === m.recipeId);
+      if (!recipe || !recipe.ausbringungMenge) return;
+      const ansaetze = qty / Number(m.stueckProAnsatz);
+      const scale = ansaetze / recipe.ausbringungMenge;
+      const expandedItems = expandVorteige(recipe.items, materials);
+      expandedItems.forEach((it) => {
+        const needed = it.menge * scale;
+        map.set(it.materialId, (map.get(it.materialId) || 0) + needed);
+      });
+    });
+    // Fixer Schwund-Abzug bei jeder Bestellung
+    const roggen = materials.find((m) => m.name.trim().toLowerCase() === "roggen 960");
+    const dinkel = materials.find((m) => m.name.trim().toLowerCase() === "dinkelmehl");
+    if (roggen) map.set(roggen.id, (map.get(roggen.id) || 0) + SCHWUND_G);
+    if (dinkel) map.set(dinkel.id, (map.get(dinkel.id) || 0) + SCHWUND_G);
+
+    return [...map.entries()]
+      .map(([materialId, needed]) => {
+        const mat = materials.find((m) => m.id === materialId);
+        const isSchwund = materialId === roggen?.id || materialId === dinkel?.id;
+        return { materialId, mat, needed, resultingStock: (mat?.stock ?? 0) - needed, isSchwund };
+      })
+      .filter((c) => c.mat);
+  }, [totals, mapping, recipes, materials, products]);
+
+  const anyNegative = consolidated.some((c) => c.resultingStock < 0);
+  const unmappedActive = products.filter((abbr) => totals && totals[abbr] > 0 && !mapping[abbr]?.recipeId);
+  const missingPieces = products.filter((abbr) => totals && totals[abbr] > 0 && mapping[abbr]?.recipeId && !mapping[abbr]?.stueckProAnsatz);
+
+  const applyDeduction = () => {
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const c = consolidated.find((c) => c.materialId === m.id);
+        return c ? { ...m, stock: Math.round((m.stock - c.needed) * 1000) / 1000 } : m;
+      })
+    );
+    const newColumnMap = { ...columnMap };
+    products.forEach((abbr) => {
+      if (mapping[abbr]?.recipeId) newColumnMap[abbr] = { recipeId: mapping[abbr].recipeId, stueckProAnsatz: mapping[abbr].stueckProAnsatz };
+    });
+    setColumnMap(newColumnMap);
+    const block = blocks.find((b) => b.id === selectedBlockId);
+    const historyEntry = {
+      id: uid(),
+      appliedAt: new Date().toISOString(),
+      label: `Lieferung ${fmtBlockDate(block?.date)}`,
+      items: consolidated.map((c) => ({ materialId: c.materialId, needed: c.needed })),
+    };
+    setOrderHistory((prev) => [historyEntry, ...prev].slice(0, 50));
+    setStatus("done");
+  };
+
+  const undoHistoryEntry = (entry) => {
+    if (!window.confirm(`"${entry.label}" wirklich rückgängig machen? Die abgezogenen Mengen werden dem Lagerbestand wieder hinzugefügt.`))
+      return;
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const item = entry.items.find((i) => i.materialId === m.id);
+        return item ? { ...m, stock: Math.round((m.stock + item.needed) * 1000) / 1000 } : m;
+      })
+    );
+    setOrderHistory((prev) => prev.filter((h) => h.id !== entry.id));
+  };
+
+  const selectedBlock = blocks.find((b) => b.id === selectedBlockId);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+            Bestellung
+          </h2>
+          <div className="flex gap-1 p-1 rounded-lg" style={{ backgroundColor: COL.bg }}>
+            <button
+              onClick={() => setImportMode("manuell")}
+              className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+              style={{ backgroundColor: importMode === "manuell" ? COL.accent : "transparent", color: importMode === "manuell" ? "#fff" : COL.inkMuted }}
+            >
+              Manuell
+            </button>
+            <button
+              onClick={() => setImportMode("excel")}
+              className="text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+              style={{ backgroundColor: importMode === "excel" ? COL.accent : "transparent", color: importMode === "excel" ? "#fff" : COL.inkMuted }}
+            >
+              Excel-Datei
+            </button>
+          </div>
+        </div>
+
+        {importMode === "manuell" && (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm mb-1" style={{ color: COL.inkMuted }}>
+              Produkt(e) und Menge auswählen, bestätigen – fertig. Schwund (1,5 kg Roggen 960 + 1,5 kg Dinkelmehl) wird automatisch mit abgezogen.
+            </p>
+            {manualRows.map((row) => {
+              const rec = recipes.find((r) => r.id === row.recipeId);
+              return (
+                <div key={row.id} className="flex items-center gap-2">
+                  <select style={{ ...inputStyle, flex: 2 }} value={row.recipeId} onChange={(e) => updateManualRow(row.id, { recipeId: e.target.value })}>
+                    {groupByKategorie(recipes).map((g) => (
+                      <optgroup key={g.kategorie} label={g.kategorie}>
+                        {g.items.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <input
+                    style={{ ...inputStyle, flex: 1 }}
+                    type="number"
+                    step="0.01"
+                    placeholder="Menge"
+                    value={row.menge}
+                    onChange={(e) => updateManualRow(row.id, { menge: e.target.value })}
+                  />
+                  <span className="text-xs w-16" style={{ color: COL.inkMuted }}>
+                    {rec?.ausbringungEinheit || ""}
+                  </span>
+                  <button onClick={() => removeManualRow(row.id)} style={{ color: COL.warn }}>
+                    <X size={16} />
+                  </button>
+                </div>
+              );
+            })}
+            <button onClick={addManualRow} className="text-sm font-medium mt-1 flex items-center gap-1 w-fit" style={{ color: COL.accent }}>
+              <Plus size={14} /> Weiteres Produkt
+            </button>
+          </div>
+        )}
+      </Card>
+
+      {importMode === "manuell" && manualConsolidated.length > 0 && (
+        <Card>
+          <div className="overflow-x-auto mb-4">
+            <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                  {["Rohstoff", "Benötigt", "Lager", "Nach Abzug"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left py-2 px-2 font-medium"
+                      style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {manualConsolidated.map((c) => (
+                  <tr key={c.materialId} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                    <td className="py-2 px-2" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                      {c.mat.name}
+                      {c.isSchwund && (
+                        <span className="text-xs ml-2 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: COL.amberSoft, color: COL.amber }}>
+                          +1,5 kg Schwund
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-2">
+                      {fmtNum(c.needed)} {c.mat.unit}
+                    </td>
+                    <td className="py-2 px-2">
+                      {fmtNum(c.mat.stock)} {c.mat.unit}
+                    </td>
+                    <td className="py-2 px-2" style={{ color: c.resultingStock < 0 ? COL.warn : COL.ink, fontWeight: c.resultingStock < 0 ? 600 : 400 }}>
+                      {fmtNum(c.resultingStock)} {c.mat.unit}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {manualConsolidated.some((c) => !c.isSchwund && c.resultingStock < 0) && (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg mb-3" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+              <AlertTriangle size={16} /> Für manche Rohstoffe reicht der Bestand nicht aus.
+            </div>
+          )}
+          {manualApplied ? (
+            <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+              <CheckCircle2 size={16} /> Lagerbestand aktualisiert.
+            </div>
+          ) : (
+            <button onClick={applyManualDeduction} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+              Bestätigen
+            </button>
+          )}
+        </Card>
+      )}
+
+      {importMode === "excel" && (
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+            Bestellung importieren
+          </h2>
+          {status !== "idle" && (
+            <button onClick={resetAll} className="text-xs underline" style={{ color: COL.inkMuted }}>
+              Neue Datei
+            </button>
+          )}
+        </div>
+
+        {status === "idle" && (
+          <div>
+            <p className="text-sm mb-3" style={{ color: COL.inkMuted }}>
+              Deine Bestell-Excel hochladen (Kunden als Zeilen, Produkt-Spalten wie "Bauern", "Dinkel", …). Du wählst danach den
+              Liefertag aus, ordnest die Produkte einmalig deinen Rezepten zu, und die App berechnet und zieht die Rohstoffe ab.
+            </p>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ backgroundColor: COL.accent, color: "#fff" }}
+            >
+              Bestell-Datei auswählen
+            </button>
+          </div>
+        )}
+
+        {status === "parsing" && (
+          <div className="text-sm" style={{ color: COL.inkMuted }}>
+            Datei wird eingelesen…
+          </div>
+        )}
+
+        {status === "pick-sheet" && workbook && (
+          <div className="flex flex-col gap-3">
+            <Field label="Welches Tabellenblatt (z.B. Monat)?">
+              <select style={inputStyle} onChange={(e) => loadSheet(workbook, e.target.value)} defaultValue="">
+                <option value="" disabled>
+                  – auswählen –
+                </option>
+                {workbook.SheetNames.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
+
+        {status === "pick-date" && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm" style={{ color: COL.inkMuted }}>
+              Blatt "{sheetName}" – {blocks.length} Liefertermin(e) gefunden. Für welchen Tag soll gerechnet werden?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {blocks.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => chooseDate(b.id)}
+                  className="text-sm font-medium px-3 py-2 rounded-lg"
+                  style={{ border: `1px solid ${COL.accent}`, color: COL.accent }}
+                >
+                  {fmtBlockDate(b.date)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="flex flex-col gap-3">
+            <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+              {errorMsg}
+            </div>
+            {debugInfo && (
+              <div
+                className="text-xs px-3 py-2 rounded-lg"
+                style={{ backgroundColor: COL.bg, color: COL.inkMuted, fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                Technische Details: {debugInfo}
+              </div>
+            )}
+            <button onClick={resetAll} className="text-sm font-medium underline w-fit" style={{ color: COL.accent }}>
+              Erneut versuchen
+            </button>
+          </div>
+        )}
+
+        {status === "mapping" && totals && (
+          <div className="flex flex-col gap-5">
+            <p className="text-sm" style={{ color: COL.inkMuted }}>
+              Liefertag <strong>{fmtBlockDate(selectedBlock?.date)}</strong>. Ordne jedes Produkt einem Rezept zu und gib an, wie
+              viele Stück ein Ansatz ergibt (nur einmalig nötig – wird gemerkt).
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                    {["Produkt", "Bestellt", "Rezept", "Stück/Ansatz", ""].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left py-1.5 px-2 font-medium"
+                        style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.filter((abbr) => totals[abbr] > 0).map((abbr) => (
+                    <tr key={abbr} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                      <td className="py-1.5 px-2" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                        {abbr}
+                      </td>
+                      <td className="py-1.5 px-2">{fmtNum(totals[abbr])} Stk</td>
+                      <td className="py-1.5 px-2">
+                        <select
+                          style={{ ...inputStyle, padding: "4px 8px", fontFamily: "'IBM Plex Sans', sans-serif" }}
+                          value={mapping[abbr]?.recipeId || ""}
+                          onChange={(e) => updateMapping(abbr, { recipeId: e.target.value })}
+                        >
+                          <option value="">– auswählen –</option>
+                          {recipes.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          style={{ ...inputStyle, width: 70, padding: "4px 8px" }}
+                          type="number"
+                          step="1"
+                          min="1"
+                          placeholder="z.B. 4"
+                          value={mapping[abbr]?.stueckProAnsatz || ""}
+                          onChange={(e) => updateMapping(abbr, { stueckProAnsatz: e.target.value })}
+                        />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {!mapping[abbr]?.recipeId && (
+                          <span title="Kein Rezept zugeordnet" style={{ color: COL.warn }}>
+                            <AlertTriangle size={16} />
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {consolidated.length > 0 && (
+              <div>
+                <p className="text-xs mb-2" style={{ color: COL.inkMuted }}>
+                  Benötigte Rohstoffe für diesen Liefertag insgesamt (inkl. 1,5 kg Schwund bei Roggen 960 und Dinkelmehl):
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                        {["Rohstoff", "Benötigt", "Aktueller Bestand", "Nach Abzug"].map((h) => (
+                          <th
+                            key={h}
+                            className="text-left py-1.5 px-2 font-medium"
+                            style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {consolidated.map((c) => (
+                        <tr key={c.materialId} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                          <td className="py-1.5 px-2" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                            {c.mat.name}
+                            {c.isSchwund && (
+                              <span
+                                className="text-xs ml-2 px-1.5 py-0.5 rounded-full"
+                                style={{ backgroundColor: COL.amberSoft, color: COL.amber }}
+                              >
+                                +1,5 kg Schwund
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2">
+                            {fmtNum(c.needed)} {c.mat.unit}
+                          </td>
+                          <td className="py-1.5 px-2">
+                            {fmtNum(c.mat.stock)} {c.mat.unit}
+                          </td>
+                          <td
+                            className="py-1.5 px-2"
+                            style={{ color: c.resultingStock < 0 ? COL.warn : COL.ink, fontWeight: c.resultingStock < 0 ? 600 : 400 }}
+                          >
+                            {fmtNum(c.resultingStock)} {c.mat.unit}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {anyNegative && (
+                  <div
+                    className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg mt-2"
+                    style={{ backgroundColor: COL.warnSoft, color: COL.warn }}
+                  >
+                    <AlertTriangle size={16} /> Für manche Rohstoffe reicht der aktuelle Bestand nicht aus.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {(unmappedActive.length > 0 || missingPieces.length > 0) && (
+              <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: COL.amberSoft, color: COL.amber }}>
+                {unmappedActive.length > 0 && <div>Noch ohne Rezept: {unmappedActive.join(", ")}</div>}
+                {missingPieces.length > 0 && <div>Noch ohne Stück/Ansatz: {missingPieces.join(", ")}</div>}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={applyDeduction}
+                disabled={consolidated.length === 0}
+                className="text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ backgroundColor: COL.accent, color: "#fff", opacity: consolidated.length === 0 ? 0.5 : 1 }}
+              >
+                Bestand abziehen
+              </button>
+              <button onClick={resetAll} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status === "done" && (
+          <div className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+            <CheckCircle2 size={16} /> Lagerbestand für den {fmtBlockDate(selectedBlock?.date)} wurde aktualisiert.
+          </div>
+        )}
+      </Card>
+      )}
+
+      {orderHistory.length > 0 && (
+        <Card>
+          <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: "'Fraunces', serif" }}>
+            Bestellverlauf
+          </h3>
+          <div className="flex flex-col gap-2">
+            {orderHistory.map((entry) => (
+              <div
+                key={entry.id}
+                className="flex items-center justify-between text-sm px-3 py-2 rounded-lg"
+                style={{ border: `1px solid ${COL.line}` }}
+              >
+                <div>
+                  <div style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>{entry.label}</div>
+                  <div className="text-xs" style={{ color: COL.inkMuted }}>
+                    {new Date(entry.appliedAt).toLocaleString("de-DE")} · {entry.items.length} Rohstoffe abgezogen
+                  </div>
+                </div>
+                <button
+                  onClick={() => undoHistoryEntry(entry)}
+                  className="text-xs font-medium px-2.5 py-1.5 rounded-lg"
+                  style={{ border: `1px solid ${COL.warn}`, color: COL.warn }}
+                >
+                  Rückgängig
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ---------- Preise & Allergene importieren ----------
+function PreiseImportPanel({ materials, setMaterials, onClose }) {
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState("idle"); // idle | review | error
+  const [rows, setRows] = useState([]);
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const handleParse = () => {
+    const { rows: parsed, error } = parsePriceList(text);
+    if (error) {
+      setStatus("error");
+      setErrorMsg(error);
+      return;
+    }
+    const matchedRows = [];
+    let unmatched = 0;
+    parsed.forEach((r) => {
+      const { match, score } = findBestMatch(r.rawName, materials, (m) => m.name);
+      if (!match) {
+        unmatched++;
+        return;
+      }
+      const priceG = r.priceKg != null ? Math.round((r.priceKg / 1000) * 10000) / 10000 : null;
+      matchedRows.push({
+        id: uid(),
+        rawName: r.rawName,
+        materialId: match.id,
+        matchScore: score,
+        priceG,
+        allergene: r.allergene,
+        zusatzstoffe: r.zusatzstoffe,
+        uebernehmenPreis: priceG != null && priceG > 0,
+        uebernehmenAllergene: r.allergene.length > 0,
+        uebernehmenZusatzstoffe: r.zusatzstoffe.length > 0,
+      });
+    });
+    setRows(matchedRows);
+    setUnmatchedCount(unmatched);
+    setStatus(matchedRows.length > 0 ? "review" : "error");
+    if (matchedRows.length === 0) setErrorMsg("Keine der Zeilen konnte einem deiner Rohstoffe zugeordnet werden.");
+  };
+
+  const updateRow = (id, patch) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const apply = () => {
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const r = rows.find((r) => r.materialId === m.id);
+        if (!r) return m;
+        const patch = {};
+        if (r.uebernehmenPreis && r.priceG != null) patch.price = r.priceG;
+        if (r.uebernehmenAllergene && r.allergene.length > 0) patch.allergene = r.allergene;
+        if (r.uebernehmenZusatzstoffe && r.zusatzstoffe) patch.zusatzstoffe = r.zusatzstoffe;
+        return Object.keys(patch).length > 0 ? { ...m, ...patch } : m;
+      })
+    );
+    onClose();
+  };
+
+  return (
+    <div className="mb-5 p-4 rounded-lg" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
+          Preise & Allergene importieren
+        </h3>
+        <button onClick={onClose} style={{ color: COL.inkMuted }}>
+          <X size={16} />
+        </button>
+      </div>
+
+      {status === "idle" && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm" style={{ color: COL.inkMuted }}>
+            Füg hier deine komplette Preisliste ein (mit Kopfzeile, so wie aus Excel kopiert – Spalten "Produktbezeichnung im
+            Rezept", "Nettopreis / kg" und "Lebensmittelkennzeichnung" werden automatisch erkannt). Nur Zeilen, die zu einem
+            deiner vorhandenen Rohstoffe passen, werden übernommen. Bei Allergenen/Zusatzstoffen wird nichts geraten – wird
+            nichts erkannt, bleibt das Feld unverändert.
+          </p>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Hier die Tabelle einfügen (inkl. Kopfzeile) …"
+            className="w-full text-xs p-3 rounded-lg"
+            style={{ ...inputStyle, height: 160, fontFamily: "'IBM Plex Mono', monospace", resize: "vertical" }}
+          />
+          <button
+            onClick={handleParse}
+            disabled={!text.trim()}
+            className="text-sm font-medium px-3 py-2 rounded-lg w-fit"
+            style={{ backgroundColor: COL.accent, color: "#fff", opacity: text.trim() ? 1 : 0.5 }}
+          >
+            Liste einlesen
+          </button>
+        </div>
+      )}
+
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+            {errorMsg}
+          </div>
+          <button onClick={() => setStatus("idle")} className="text-sm font-medium underline w-fit" style={{ color: COL.accent }}>
+            Erneut versuchen
+          </button>
+        </div>
+      )}
+
+      {status === "review" && (
+        <div className="flex flex-col gap-4">
+          <p className="text-xs" style={{ color: COL.inkMuted }}>
+            {rows.length} von {rows.length + unmatchedCount} Katalogeinträgen deinem Lager zugeordnet
+            {unmatchedCount > 0 ? ` (${unmatchedCount} betreffen Rohstoffe, die du nicht im Lager hast – übersprungen)` : ""}.
+            Häkchen steuern, was übernommen wird.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COL.line}`, backgroundColor: COL.bg }}>
+                  {["Rohstoff", "Preis/g", "", "Allergene", "", "Zusatzstoffe", ""].map((h, i) => (
+                    <th
+                      key={i}
+                      className="text-left py-1.5 px-2 font-medium"
+                      style={{ color: COL.inkMuted, fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const mat = materials.find((m) => m.id === r.materialId);
+                  return (
+                    <tr key={r.id} className="hover:bg-black/[0.02] transition-colors" style={{ borderBottom: `1px solid ${COL.line}` }}>
+                      <td className="py-1.5 px-2 text-xs" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                        {mat?.name}
+                        {r.matchScore < 0.75 && (
+                          <span title="Unsichere Zuordnung, bitte prüfen" style={{ color: COL.warn, marginLeft: 4 }}>
+                            <AlertTriangle size={12} style={{ display: "inline" }} />
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          style={{ ...inputStyle, width: 80, padding: "4px 8px" }}
+                          type="number"
+                          step="0.0001"
+                          value={r.priceG ?? ""}
+                          onChange={(e) => updateRow(r.id, { priceG: e.target.value === "" ? null : Number(e.target.value) })}
+                        />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          type="checkbox"
+                          checked={r.uebernehmenPreis}
+                          onChange={(e) => updateRow(r.id, { uebernehmenPreis: e.target.checked })}
+                        />
+                      </td>
+                      <td className="py-1.5 px-2 text-xs" style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COL.amber }}>
+                        {r.allergene.length > 0 ? r.allergene.map(allergenLabel).join(", ") : <span style={{ color: COL.inkMuted }}>–</span>}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {r.allergene.length > 0 && (
+                          <input
+                            type="checkbox"
+                            checked={r.uebernehmenAllergene}
+                            onChange={(e) => updateRow(r.id, { uebernehmenAllergene: e.target.checked })}
+                          />
+                        )}
+                      </td>
+                      <td className="py-1.5 px-2 text-xs" style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COL.inkMuted }}>
+                        {r.zusatzstoffe || "–"}
+                      </td>
+                      <td className="py-1.5 px-2">
+                        {r.zusatzstoffe && (
+                          <input
+                            type="checkbox"
+                            checked={r.uebernehmenZusatzstoffe}
+                            onChange={(e) => updateRow(r.id, { uebernehmenZusatzstoffe: e.target.checked })}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={apply} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+              Ausgewählte Werte übernehmen
+            </button>
+            <button onClick={onClose} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+document.getElementById('root').dataset.rendered = "1";
+root.render(<App />);
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function (err) {
+        console.warn('Service Worker Registrierung fehlgeschlagen:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
