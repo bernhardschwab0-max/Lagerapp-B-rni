@@ -1615,6 +1615,13 @@ function App() {
     };
   }, []);
 
+  const createManualBackup = () => {
+    const snapshot = { timestamp: new Date().toISOString(), materials, recipes, columnMap };
+    const newBackups = [snapshot, ...backups].slice(0, 5);
+    setBackups(newBackups);
+    saveLocalBackups(newBackups);
+  };
+
   const restoreBackup = (b) => {
     if (!window.confirm(`Stand vom ${new Date(b.timestamp).toLocaleString("de-DE")} wiederherstellen? Der aktuelle Stand wird überschrieben.`))
       return;
@@ -1853,15 +1860,22 @@ function App() {
           <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
-                Automatische Sicherungen
+                Sicherungen
               </h3>
               <button onClick={() => setShowBackups(false)} style={{ color: COL.inkMuted }}>
                 <X size={16} />
               </button>
             </div>
             <p className="text-xs mb-3" style={{ color: COL.inkMuted }}>
-              Einmal täglich beim ersten Öffnen wird automatisch eine Sicherung angelegt, zusätzlich beim Schließen/Tab-Wechsel (die letzten {5} Stände, um die Speichergröße klein zu halten).
+              Einmal täglich beim ersten Öffnen wird automatisch eine Sicherung angelegt, zusätzlich beim Schließen/Tab-Wechsel (die letzten {5} Stände, um die Speichergröße klein zu halten). Du kannst jederzeit zusätzlich selbst eine Sicherung anlegen.
             </p>
+            <button
+              onClick={createManualBackup}
+              className="text-sm font-medium px-3 py-2 rounded-lg mb-3"
+              style={{ border: `1px solid ${COL.accent}`, color: COL.accent }}
+            >
+              Jetzt sichern
+            </button>
             {backups.length === 0 ? (
               <p className="text-sm" style={{ color: COL.inkMuted }}>
                 Noch keine Sicherung vorhanden – wird beim nächsten Schließen der App angelegt.
@@ -3368,6 +3382,7 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
   };
 
   const SCHWUND_G = 1500;
+  const [schwundAktiv, setSchwundAktiv] = useState(true);
   const manualConsolidated = useMemo(() => {
     const map = new Map();
     manualRows
@@ -3382,10 +3397,10 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
           map.set(it.materialId, (map.get(it.materialId) || 0) + needed);
         });
       });
-    const roggen = materials.find((m) => m.name.trim().toLowerCase() === "roggen 960");
+    const roggen = materials.find((m) => m.name.trim().toLowerCase() === "roggenmehl 960");
     const dinkel = materials.find((m) => m.name.trim().toLowerCase() === "dinkelmehl");
     const anyRealProduct = manualRows.some((r) => r.recipeId && Number(r.menge) > 0);
-    if (anyRealProduct) {
+    if (anyRealProduct && schwundAktiv) {
       if (roggen) map.set(roggen.id, (map.get(roggen.id) || 0) + SCHWUND_G);
       if (dinkel) map.set(dinkel.id, (map.get(dinkel.id) || 0) + SCHWUND_G);
     }
@@ -3396,7 +3411,7 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
         return { materialId, mat, needed, resultingStock: (mat?.stock ?? 0) - needed, isSchwund };
       })
       .filter((c) => c.mat);
-  }, [manualRows, recipes, materials]);
+  }, [manualRows, recipes, materials, schwundAktiv]);
 
   const applyManualDeduction = () => {
     if (manualConsolidated.length === 0) return;
@@ -3522,11 +3537,13 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
         map.set(it.materialId, (map.get(it.materialId) || 0) + needed);
       });
     });
-    // Fixer Schwund-Abzug bei jeder Bestellung
-    const roggen = materials.find((m) => m.name.trim().toLowerCase() === "roggen 960");
+    // Optionaler Schwund-Abzug bei dieser Bestellung
+    const roggen = materials.find((m) => m.name.trim().toLowerCase() === "roggenmehl 960");
     const dinkel = materials.find((m) => m.name.trim().toLowerCase() === "dinkelmehl");
-    if (roggen) map.set(roggen.id, (map.get(roggen.id) || 0) + SCHWUND_G);
-    if (dinkel) map.set(dinkel.id, (map.get(dinkel.id) || 0) + SCHWUND_G);
+    if (schwundAktiv) {
+      if (roggen) map.set(roggen.id, (map.get(roggen.id) || 0) + SCHWUND_G);
+      if (dinkel) map.set(dinkel.id, (map.get(dinkel.id) || 0) + SCHWUND_G);
+    }
 
     return [...map.entries()]
       .map(([materialId, needed]) => {
@@ -3535,7 +3552,7 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
         return { materialId, mat, needed, resultingStock: (mat?.stock ?? 0) - needed, isSchwund };
       })
       .filter((c) => c.mat);
-  }, [totals, mapping, recipes, materials, products]);
+  }, [totals, mapping, recipes, materials, products, schwundAktiv]);
 
   const anyNegative = consolidated.some((c) => c.resultingStock < 0);
   const unmappedActive = products.filter((abbr) => totals && totals[abbr] > 0 && !mapping[abbr]?.recipeId);
@@ -3606,8 +3623,12 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
         {importMode === "manuell" && (
           <div className="flex flex-col gap-2">
             <p className="text-sm mb-1" style={{ color: COL.inkMuted }}>
-              Produkt(e) und Menge auswählen, bestätigen – fertig. Schwund (1,5 kg Roggen 960 + 1,5 kg Dinkelmehl) wird automatisch mit abgezogen.
+              Produkt(e) und Menge auswählen, bestätigen – fertig.
             </p>
+            <label className="flex items-center gap-2 text-sm mb-1" style={{ color: COL.ink }}>
+              <input type="checkbox" checked={schwundAktiv} onChange={(e) => setSchwundAktiv(e.target.checked)} />
+              Schwund abziehen (1,5 kg Roggenmehl 960 + 1,5 kg Dinkelmehl)
+            </label>
             {manualRows.map((row) => {
               const rec = recipes.find((r) => r.id === row.recipeId);
               return (
@@ -3866,8 +3887,12 @@ function BestellungTab({ materials, setMaterials, recipes, setRecipes, columnMap
 
             {consolidated.length > 0 && (
               <div>
+                <label className="flex items-center gap-2 text-sm mb-2" style={{ color: COL.ink }}>
+                  <input type="checkbox" checked={schwundAktiv} onChange={(e) => setSchwundAktiv(e.target.checked)} />
+                  Schwund abziehen (1,5 kg Roggenmehl 960 + 1,5 kg Dinkelmehl)
+                </label>
                 <p className="text-xs mb-2" style={{ color: COL.inkMuted }}>
-                  Benötigte Rohstoffe für diesen Liefertag insgesamt (inkl. 1,5 kg Schwund bei Roggen 960 und Dinkelmehl):
+                  Benötigte Rohstoffe für diesen Liefertag insgesamt{schwundAktiv ? " (inkl. 1,5 kg Schwund bei Roggenmehl 960 und Dinkelmehl)" : ""}:
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
