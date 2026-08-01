@@ -1174,6 +1174,22 @@ function clearConfig() {
   localStorage.removeItem("jsonbin_apikey");
   localStorage.removeItem("jsonbin_binid");
 }
+// Sicherungen bleiben lokal auf dem Gerät (nicht in der Cloud), damit das
+// jsonbin.io-Gratislimit von 100kb pro Datensatz nicht durch mehrfach
+// gespeicherte Vollkopien der Daten überschritten wird.
+function loadLocalBackups() {
+  try {
+    const raw = localStorage.getItem("lager_backups");
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveLocalBackups(backups) {
+  try {
+    localStorage.setItem("lager_backups", JSON.stringify(backups));
+  } catch (e) {}
+}
 async function createBin(apiKey, data) {
   const res = await fetch("https://api.jsonbin.io/v3/b", {
     method: "POST",
@@ -1520,10 +1536,10 @@ function App() {
           if (data.recipes) setRecipes(recs);
           if (data.columnMap) setColumnMap(data.columnMap);
           if (data.orderHistory) setOrderHistory(data.orderHistory);
-          const existingBackups = data.backups || [];
+          const existingBackups = loadLocalBackups();
           setBackups(existingBackups);
 
-          // Einmal täglich beim ersten Öffnen automatisch eine Sicherung anlegen
+          // Einmal täglich beim ersten Öffnen automatisch eine Sicherung anlegen (nur lokal, nicht in der Cloud)
           if (mats.length > 0) {
             const today = new Date().toISOString().slice(0, 10);
             const hasTodayBackup = existingBackups.some((b) => b.timestamp && b.timestamp.slice(0, 10) === today);
@@ -1531,13 +1547,7 @@ function App() {
               const snapshot = { timestamp: new Date().toISOString(), materials: mats, recipes: recs, columnMap: data.columnMap || {} };
               const newBackups = [snapshot, ...existingBackups].slice(0, 5);
               setBackups(newBackups);
-              writeBin(config.apiKey, config.binId, {
-                materials: mats,
-                recipes: recs,
-                columnMap: data.columnMap || {},
-                orderHistory: data.orderHistory || [],
-                backups: newBackups,
-              }).catch(() => {});
+              saveLocalBackups(newBackups);
             }
           }
         }
@@ -1560,7 +1570,7 @@ function App() {
     setSyncState("saving");
     const t = setTimeout(async () => {
       try {
-        await writeBin(config.apiKey, config.binId, { materials, recipes, columnMap, orderHistory, backups });
+        await writeBin(config.apiKey, config.binId, { materials, recipes, columnMap, orderHistory });
         setSyncState("saved");
         setSyncErrorDetail("");
       } catch (e) {
@@ -1580,11 +1590,12 @@ function App() {
     const makeBackupAndSave = () => {
       if (!loadedRef.current) return; // Noch nicht fertig geladen -> niemals überschreiben
       const { materials, recipes, columnMap, orderHistory, backups, config } = latestRef.current;
-      if (!config) return;
       const snapshot = { timestamp: new Date().toISOString(), materials, recipes, columnMap };
       const newBackups = [snapshot, ...(backups || [])].slice(0, 5);
+      saveLocalBackups(newBackups);
+      if (!config) return;
       try {
-        const body = JSON.stringify({ materials, recipes, columnMap, orderHistory, backups: newBackups });
+        const body = JSON.stringify({ materials, recipes, columnMap, orderHistory });
         fetch(`https://api.jsonbin.io/v3/b/${config.binId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "X-Master-Key": config.apiKey },
