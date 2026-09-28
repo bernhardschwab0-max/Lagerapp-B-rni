@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lager & Rezeptur</title>
+<title>Börni's Backstube · Lager & Rezeptur</title>
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#E2564B">
+<meta name="theme-color" content="#3B2A1E">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -30,7 +30,12 @@
 <script crossorigin="anonymous" data-tesseract-loader="1" src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script crossorigin="anonymous" data-xlsx-loader="1" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-  body { margin: 0; }
+  body { margin: 0; background: #FAF3E7; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  @keyframes wiggle { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+  @keyframes rise { 0% { transform: scale(.9); opacity: .6; } 50% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(.9); opacity: .6; } }
+  .bottom-nav { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  ::selection { background: #F9E7D8; }
 </style>
 </head>
 <body>
@@ -216,15 +221,17 @@ const ChevronDown = (props) => (
   <Icon {...props} paths={<polyline points="6 9 12 15 18 9" />} />
 );
 
-// ---------- Design tokens (angelehnt an Bäckerei Kurz, Ischgl) ----------
+// ---------- Design tokens (Börni's Backstube: Krustenbraun, Weizengold, Mehlweiß) ----------
 const COL = {
-  bg: "#FBF5EB",
+  bg: "#FAF3E7",
   surface: "#FFFFFF",
   ink: "#2E2118",
   inkMuted: "#8C7C68",
   line: "#EADFC9",
-  accent: "#E2564B",
-  accentSoft: "#FBE7E3",
+  accent: "#C4622D",
+  accentSoft: "#F9E7D8",
+  crust: "#3B2A1E",
+  wheat: "#E8B64C",
   warn: "#B3401D",
   warnSoft: "#FBEAE2",
   ok: "#55804A",
@@ -1049,7 +1056,381 @@ const seedRecipes = [
   },
 ];
 
+// ---------- Rezept-Import aus "Rezepte Neu EXEL.xlsx" (Stand September 2026) ----------
+// Mengen = Spalte B der Excel (= 1 Ansatz). "stueck" = Anzahl Stück pro Ansatz laut Excel.
+// Bestehende Rezepte werden per Name (oder altem Namen in "alias") gefunden und behalten ihre ID,
+// damit Zuordnungen im Bestellung-Tab erhalten bleiben.
+const REZEPT_IMPORT_VERSION = "excel-2026-09";
+
+// Excel-Zutatenname -> mögliche Rohstoff-Namen in der App (erster Treffer gewinnt, sonst wird der erste neu angelegt)
+const ZUTAT_ALIAS = {
+  "Roggen960": ["Roggen 960", "Roggenmehl 960"],
+  "Roggen 960": ["Roggen 960", "Roggenmehl 960"],
+  "Kochstück": ["Kochstück D.", "Kochstück D", "Kochstück"],
+  "Kochstück D": ["Kochstück D.", "Kochstück D"],
+  "Roggenvollkorn": ["Roggenvollkorn", "Vollkornmehl"],
+  "SonnenblumenK.": ["Sonnenblumen K."],
+  "Stb. Zucker": ["Staubzucker"],
+  "Salz, Vanille": ["Salz und Vanille"],
+  "Butter 60°C": ["Butter"],
+  "Mich": ["Milch"],
+  "Eiwei": ["Eiweiß"],
+  "ÖL": ["Öl"],
+  "Zucker V.": ["Vanillezucker"],
+  "Gelantine": ["Blatt Gelatine", "Gelantine"],
+  "Galantine": ["Blatt Gelatine", "Galantine"],
+  "Haselmüsse": ["Haselnüsse", "Haselmüsse"],
+  "Wallnüsse": ["Walnüsse", "Wallnüsse"],
+  "Orangat": ["Orangeat", "Orangat"],
+  "Kuvertüre D.": ["Kuvertüre D.", "Dunkle K."],
+};
+
+const EXCEL_REZEPTE = [
+  // ----- Brot -----
+  { name: "Bauernbrot", kategorie: "Brot", stueck: 1, teiggewicht: "1.150 – 1.160 g",
+    gruppen: [{ z: [["Roggen 960", 315], ["Dinkelmehl", 165], ["Wasser", 280], ["Sauerteig R.", 380], ["Trockengerm", 3], ["Salz", 17]] }] },
+  { name: "Roggenpur", kategorie: "Brot", stueck: 1, teiggewicht: "1.150 – 1.160 g",
+    gruppen: [{ z: [["Roggen 960", 300], ["Roggen 2500", 98], ["Wasser", 290], ["Sauerteig R.", 446], ["Trockengerm", 3], ["Salz", 17]] }] },
+  { name: "A Christel", kategorie: "Brot", stueck: 1, teiggewicht: "850 g",
+    anleitung: "Kochstück: 77 g Wasser + 38 g Dinkelmehl.",
+    gruppen: [{ z: [["Roggen 960", 75], ["Dinkelmehl", 260], ["Wasser", 150], ["Sauerteig R.", 245], ["Kochstück D.", 115], ["Germ", 2], ["Salz", 11]] }] },
+  { name: "Dinkelpur", kategorie: "Brot", stueck: 1, teiggewicht: "1.150 – 1.160 g",
+    gruppen: [{ z: [["Dinkelmehl", 530], ["Kochstück D", 50], ["Wasser", 275], ["Sauerteig D.", 300], ["Trockengerm", 4], ["Salz", 18]] }] },
+  { name: "Zeitlos", kategorie: "Brot", stueck: 1, teiggewicht: "950 g",
+    gruppen: [{ z: [["Dinkelmehl", 217], ["Roggen 960", 118], ["Wasser", 148], ["Sauerteig D.", 216], ["Kochstück R.", 240], ["Trockenhefe", 2], ["Salz", 12]] }] },
+  { name: "Kartoffelwurzel", kategorie: "Brot", stueck: 1, teiggewicht: "400 g",
+    gruppen: [{ z: [["Dinkelmehl", 172], ["Kartoffeln G. und K.", 87], ["Sauerrahm", 23], ["Wasser", 80], ["Kochstück D", 33], ["Muskatnuss", 0.7], ["Trockengerm", 1.5], ["Salz", 5]] }] },
+  { name: "Vollkornbrot", kategorie: "Brot", stueck: 1, teiggewicht: "1.150 – 1.160 g",
+    gruppen: [
+      { titel: "Kochstück", z: [["Roggenschrot", 50], ["Wasser", 150]] },
+      { titel: "Teig", z: [["Roggenvollkorn", 420], ["Wasser", 230], ["Sauerteig R.", 280], ["Trockenhefe", 6], ["Salz", 17]] },
+    ] },
+  { name: "Körnerkick", kategorie: "Brot", stueck: 1, teiggewicht: "850 g",
+    gruppen: [
+      { titel: "Quellstück", z: [["Leinsamen", 25], ["Dinkelflocken", 25], ["Sonnenblumen K.", 25], ["Wasser Kochend", 145]] },
+      { titel: "Teig", z: [["Dinkelvollmehl", 330], ["Wasser", 115], ["Sauerteig D.", 170], ["Salz", 14], ["Trockenhefe", 3]] },
+    ] },
+  { name: "Roggentraum", kategorie: "Brot", stueck: 1, teiggewicht: "1.150 – 1.160 g",
+    gruppen: [{ z: [["Roggen 960", 250], ["Roggenvollkorn", 155], ["Kochstück RS.", 237], ["Sauerteig R.", 280], ["Wasser", 220], ["Trockengerm", 3], ["Salz", 17]] }] },
+  { name: "Christstollen", kategorie: "Brot", stueck: 1, teiggewicht: "580 g (inkl. Früchtemischung)",
+    anleitung: "Dazu 1× Früchtemischung Christstollen (24 h eingeweicht).",
+    gruppen: [
+      { titel: "Vorteig", z: [["Dinkelmehl", 65], ["Milch", 50], ["Trockenhefe", 7.8], ["Zucker", 4]] },
+      { titel: "Hauptteig", z: [["Dinkelmehl", 100], ["Kochstück", 25], ["Butter", 78], ["Zucker", 28], ["Vanillezucker", 5], ["Salz", 2.5]] },
+    ] },
+  { name: "Kletzenbrot", kategorie: "Brot", stueck: 1, teiggewicht: "580 g (inkl. Früchtemischung)",
+    anleitung: "Alle Zutaten + Früchtemischung mischen. Nicht getrennt mischen.",
+    gruppen: [{ z: [["Roggen 960", 62.62], ["Roggen 2500", 22.22], ["Wasser", 27.47], ["Sauerteig R.", 68.68], ["Trockengerm", 1], ["Salz", 3.69]] }] },
+
+  // ----- Fruchtmischungen -----
+  { name: "Früchtemischung Kletzenbrot", alias: ["Früchtemischung Ketzenbrot"], kategorie: "Fruchtmischungen", stueck: 1,
+    teiggewicht: "abgetropft ca. 394 g pro Kletzenbrot",
+    gruppen: [{ z: [["Kletzen", 98.4], ["Rosinen", 41], ["Pflaumen", 59.45], ["Haselmüsse", 14.35], ["Wallnüsse", 14.35], ["Orangat", 6.15], ["Zitronat", 6.15], ["Zimtstangen", 1.5], ["Wasser", 164], ["Rum", 41], ["Apfelsaft", 49.2]] }] },
+  { name: "Früchtemischung Christstollen", alias: ["Einweichen 24h"], kategorie: "Fruchtmischungen", stueck: 1,
+    teiggewicht: "abgetropft ca. 225 g pro Stollen",
+    anleitung: "24 h einweichen.",
+    gruppen: [{ z: [["Sultaninen", 110], ["Orangat", 27], ["Rum", 50], ["Wasser", 100]] }] },
+
+  // ----- Ciabatter -----
+  { name: "Dinkel Ciabatta", kategorie: "Ciabatter", stueck: 1, teiggewicht: "400 g",
+    gruppen: [{ z: [["Dinkelmehl", 222], ["Wasser", 65], ["Kochstück D.", 108], ["Malz", 3], ["Trockengerm", 2], ["Salz", 6]] }] },
+  { name: "Sauerteig Baguette", kategorie: "Ciabatter", stueck: 1, teiggewicht: "380 g",
+    gruppen: [
+      { titel: "Fermentierter Vorteig", z: [["Dinkelmehl", 37], ["Wasser", 22], ["Salz", 1.5], ["Hefe", 0.3]] },
+      { titel: "Hauptteig", z: [["Dinkelmehl", 148], ["Wasser", 35], ["Sauerteig D.", 50], ["Kochstück D.", 80], ["Trockenhefe", 1.2], ["Salz", 5]] },
+    ] },
+  { name: "Knoblauchpaste", kategorie: "Ciabatter", stueck: 1,
+    anleitung: "1 Stk. Ciabatta = 50 g Knoblauchpaste.",
+    gruppen: [{ z: [["Butter", 1000], ["Knoblauch", 160], ["Salz", 3], ["Oregano", 10], ["Pfeffer", 2]] }] },
+  { name: "Wurzelbrot", kategorie: "Ciabatter", stueck: 1, teiggewicht: "100 – 105 g",
+    anleitung: "Das zweite Wasser beim Kneten nach und nach dazugeben.",
+    gruppen: [
+      { z: [["Dinkelmehl", 43], ["Wasser", 11]] },
+      { titel: "Nach und nach zugeben", z: [["Wasser", 7]] },
+      { titel: "Weiter", z: [["Sauerteig R.", 23.2], ["Kochstück D.", 20], ["Trockenhefe", 0.6], ["Malz", 1.2], ["Salz", 1.2]] },
+    ] },
+
+  // ----- Gebäck -----
+  { name: "Semmelteig", kategorie: "Gebäck", stueck: 1, teiggewicht: "100 – 105 g",
+    gruppen: [{ z: [["Dinkelmehl", 54.5], ["Wasser", 17.5], ["Kochstück D.", 16.7], ["Kochstück R.", 10], ["Malz", 1.5], ["Trockenhefe", 0.8], ["Salz", 1.2]] }] },
+  { name: "Dinkelkrusti", kategorie: "Gebäck", stueck: 1, teiggewicht: "100 – 105 g",
+    gruppen: [{ z: [["Dinkelmehl", 45], ["Roggen960", 9], ["Wasser", 30], ["Kochstück", 16], ["Backmalz", 1.3], ["Trockenhefe", 0.3], ["Salz", 1.7], ["Zucker", 0.5]] }] },
+  { name: "Burger Buns", kategorie: "Gebäck", stueck: 1, teiggewicht: "125 g",
+    gruppen: [{ z: [["Dinkelmehl", 62], ["Kochstück", 20], ["Milch", 20], ["Zucker", 3.6], ["Butter", 3.6], ["Eier", 14], ["Malz", 1.3], ["Trockenhefe", 1.3], ["Salz", 1.5]] }] },
+  { name: "Kornspitz", kategorie: "Gebäck", stueck: 5, teiggewicht: "100 g",
+    gruppen: [
+      { titel: "Kochstück", z: [["Leinsamen", 10], ["SonnenblumenK.", 10], ["Roggen 2500", 30], ["Roggenmalz", 7.5], ["Wasser", 113]] },
+      { titel: "Teig", z: [["Dinkelmehl", 218], ["Wasser", 60], ["Kochstück D.", 40], ["Salz", 7], ["Trockenhefe", 1], ["Dinkelmalz", 6]] },
+    ] },
+
+  // ----- Füllungen -----
+  { name: "Mohnfülle", kategorie: "Füllungen", stueck: 1,
+    teiggewicht: "80 g Fülle pro Kipferl (110 g)",
+    anleitung: "Milch aufkochen lassen und über alle Zutaten leeren.\nBestreuung: 6 g Mohn G. pro Kipferl.",
+    gruppen: [{ z: [["Mohn G.", 308], ["Milch", 189], ["MarillenM.", 77], ["Powidell", 154], ["Zucker", 61], ["Zimt", 3], ["Rum", 10]] }] },
+
+  // ----- Süßes Gebäck -----
+  { name: "Mürbe Kipferl", kategorie: "Süßes Gebäck", stueck: 1, teiggewicht: "110 g",
+    gruppen: [{ z: [["Dinkelmehl", 56], ["Wasser", 12], ["Kochstück", 11], ["Milch", 14], ["Butter", 7.6], ["Zucker", 7.6], ["Malz", 2], ["Trockenhefe", 0.8], ["Salz", 1]] }] },
+  { name: "Brioche", kategorie: "Süßes Gebäck", stueck: 1, teiggewicht: "Kipferl 110 – 115 g · Striezel 600 g · Knopf 200 g",
+    gruppen: [{ z: [["Dinkelmehl", 284], ["Milch", 58.9], ["Kochstück G.", 53.2], ["Wasser", 42.6], ["Dinkelmehl", 10.6], ["Vollei", 64.8], ["Honig", 10.1], ["Kristallzucker", 37.3], ["Rum", 10.6], ["Hefe", 17.7], ["Zitronenaroma", 2.9], ["Vanillearoma", 2.9], ["Butter", 53.2], ["Salz", 4.3]] }] },
+  { name: "Buchteln", kategorie: "Süßes Gebäck", stueck: 10, teiggewicht: "80 g",
+    gruppen: [{ z: [["Dinkelmehl", 445], ["Dinkelmalz", 10], ["Milch", 75], ["Kochstück", 80], ["Eier", 40], ["Dotter", 20], ["Butter", 55], ["Honig", 18], ["Zucker", 35], ["Rum", 8], ["Trockenhefe", 10], ["Salz", 5], ["Vanille", 3], ["Zitrone", 3]] }] },
+
+  // ----- Kuchen -----
+  { name: "Linzerschnitte", kategorie: "Kuchen", stueck: 1, backen: "180 °C · ca. 30 – 40 min",
+    anleitung: "1.720 g Masse am Blech verstreichen, die Ribiselmarmelade daraufstreichen und mit der restlichen Masse ein Gitter dressieren. Zum Schluss mit gehobelten Mandeln bestreuen.",
+    gruppen: [{ z: [["Butter", 400], ["Stb. Zucker", 400], ["Salz, Vanille", 10], ["Zitrone", 2], ["Zimt", 4], ["Nelkenpulver", 1], ["Dotter", 160], ["Eiweiß", 180], ["Walnüsse gereiben", 400], ["Süsse Brösel", 600], ["Mehl", 200], ["Ribiselmarmelade", 500]] }] },
+  { name: "Marillenkuchen", kategorie: "Kuchen", stueck: 1, backen: "180 °C · ca. 45 – 50 min",
+    anleitung: "1.670 g Masse am Blech verstreichen und die Marillen bis auf den Boden hineindrücken. Danach Butter, Staubzucker und Mehl bröselig vermischen und über die Marillen streuen.",
+    gruppen: [
+      { titel: "Masse", z: [["Butter", 200], ["Stb. Zucker", 220], ["Vanille, Zitrone", 3], ["Dotter", 140], ["Mich", 110], ["Eiweiß", 210], ["Zucker", 180], ["Salz", 1], ["Mehl", 600], ["Backpulver", 6], ["Marillen", 1200]] },
+      { titel: "Streusel", z: [["Butter", 200], ["Mehl", 200], ["Stb. Zucker", 200]] },
+    ] },
+  { name: "Ribiselschaumschnitte", kategorie: "Kuchen", stueck: 1, backen: "190 °C ca. 10 min anbacken, dann 170 °C ca. 15 – 20 min",
+    anleitung: "946 g Masse am Blech verstreichen und bei 190 °C rund 10 min anbacken. Eiweiß mit der gleichen Menge Zucker aufschlagen. Wenn der Schnee steif ist, den restlichen gesiebten Staubzucker unterheben. Schnee mit den Ribiseln vermischen, daraufstreichen und weitere 15 – 20 min bei 170 °C backen.",
+    gruppen: [
+      { titel: "Masse", z: [["Butter", 100], ["Stb. Zucker", 280], ["Dotter", 120], ["Milch", 100], ["Vanille, Zitrone", 6], ["Mehl", 480], ["Backpulver", 9]] },
+      { titel: "Schneedecke", z: [["Eiweiß", 180], ["Staubzucker", 300], ["Salz", 3], ["Ribissel", 480]] },
+    ] },
+  { name: "Sachermasse Gemixt", kategorie: "Kuchen", stueck: 1, teiggewicht: "Torte Ø 24 cm / 6 cm hoch = 1.395 g", backen: "175 °C · ca. 60 min",
+    anleitung: "Massen je Tortengröße (6 cm hoch): Ø 26 = 1.512 g · Ø 24 = 1.395 g · Ø 22 = 1.279 g · Ø 20 = 1.163 g · Ø 18 = 1.046 g · Ø 16 = 930 g · Ø 14 = 814 g.",
+    gruppen: [
+      { titel: "Dottermasse", z: [["Butter 60°C", 233], ["Dotter", 150], ["Zucker", 112], ["Tunkmasse", 225]] },
+      { titel: "Schnee", z: [["Eiweiß", 225], ["Zucker", 225]] },
+      { titel: "Zum Schluss", z: [["Dinkelmehl", 225]] },
+    ] },
+  { name: "Schokoladenbiskuitt Gemixt", kategorie: "Kuchen", stueck: 1, backen: "190 – 200 °C · ca. 10 – 15 min",
+    gruppen: [
+      { titel: "Dottermasse", z: [["Butter", 150], ["Eigelb", 150], ["Dunkle K.", 370]] },
+      { titel: "Schnee", z: [["Eiweiß", 340], ["Zucker", 120], ["Salz", 2]] },
+      { titel: "Zum Schluss", z: [["Maizena", 60], ["Dinkelmehl", 40]] },
+    ] },
+  { name: "Mohntorte", kategorie: "Kuchen", stueck: 1, teiggewicht: "Torte Ø 24 cm / 6 cm hoch = 1.316 g", backen: "175 – 185 °C · ca. 40 min",
+    anleitung: "Massen je Tortengröße (6 cm hoch): Ø 26 = 1.425 g · Ø 24 = 1.316 g · Ø 22 = 1.206 g · Ø 20 = 1.096 g · Ø 18 = 987 g · Ø 16 = 877 g · Ø 14 = 767 g.",
+    gruppen: [
+      { titel: "Dottermasse", z: [["Dotter", 100], ["Stb. Zucker", 160], ["Öl", 155], ["Wasser", 155], ["Vanille, Zitrone", 5]] },
+      { titel: "Schnee", z: [["Eiweiß", 150], ["Kristallzucker", 150]] },
+      { titel: "Zum Schluss", z: [["Mohn", 250], ["Dinkelmehl", 187], ["Backpulver", 4]] },
+    ] },
+  { name: "Biskuit", kategorie: "Kuchen", stueck: 1, teiggewicht: "Torte Ø 24 = 950 g", backen: "Blech: 190 – 200 °C ca. 10 – 15 min · Torte: 170 – 180 °C ca. 30 – 40 min",
+    anleitung: "Torte Ø 24 = 3× Malakoff.",
+    gruppen: [{ z: [["Eier", 400], ["Zucker", 300], ["Vanille, Zitrone", 4], ["Zimt", 4], ["Dinkelmehl", 240]] }] },
+  { name: "Malakoff", alias: ["Creme"], kategorie: "Kuchen", stueck: 1,
+    anleitung: "Boden: siehe Rezept Biskuit. Biskotten: siehe Rezept Biskotten (1× Malakoff = 1× Biskotten).\n2/3 der Milch mit Zucker und Rum auf 80 °C erhitzen. 1/3 der Milch mit dem Vanillepuddingpulver verrühren und zur heißen Flüssigkeit dazuleeren. Den fertigen Pudding kalt schlagen, danach die flüssige Gelatine unterheben und zum Schluss das 2/3 geschlagene Obers unterheben. Die Biskotten in kalten Kaffee tränken und mit der Creme schichten. Die fertig gefüllte Torte 24 h kühl stellen.",
+    gruppen: [{ titel: "Creme", z: [["Milch", 500], ["Zucker", 150], ["Vanillepuding", 50], ["Rum", 5], ["Gelantine", 4], ["Obers", 500]] }] },
+  { name: "Biskotten", kategorie: "Kuchen", stueck: 1, backen: "170 – 180 °C · ca. 13 min",
+    anleitung: "Biskuitmassen kalt getrennt schlagen. Schnee + Eigelbmasse + Mehl melieren.\nMit 10-mm-Tülle ca. 7 cm aufspritzen und mit Staubzucker bestäuben.",
+    gruppen: [
+      { titel: "Eigelbmasse", z: [["Eigelb", 180], ["Stb. Zucker", 95], ["Vanille, Zitrone", 4]] },
+      { titel: "Schnee", z: [["Eiweiß", 180], ["Zucker", 90], ["Salz", 3]] },
+      { titel: "Zum Schluss", z: [["Dinkelmehl", 225]] },
+    ] },
+  { name: "Ölgugelhupf", kategorie: "Kuchen", stueck: 1,
+    gruppen: [
+      { titel: "Dottermasse", z: [["Staubzucker", 50], ["ÖL", 62], ["Wasser", 62], ["Dotter", 40]] },
+      { titel: "Schnee", z: [["Eiwei", 60], ["Zucker", 50]] },
+      { titel: "Zum Schluss", z: [["Dinkelmehl", 125], ["Backpulver", 3]] },
+    ] },
+
+  // ----- Cremen -----
+  { name: "Vanillemousse", kategorie: "Cremen", stueck: 1,
+    anleitung: "Vanilleschote auskratzen und in die Milch-Obers-Flüssigkeit geben, auf 100 °C erhitzen. Dotter mit Zucker glattrühren und die Flüssigkeit langsam unter ständigem Rühren zugeben. Zurückleeren und unter Rühren auf max. 85 °C erhitzen. Vom Herd nehmen, die eingeweichte Gelatine einrühren und abkühlen lassen (mit Frischhaltefolie abdecken, damit keine Haut entsteht). Nach dem Auskühlen das geschlagene Obers unterheben.",
+    gruppen: [
+      { titel: "Grundcreme", z: [["Milch", 200], ["Obers", 110], ["Vanilleschote", 1.5], ["Eigelb", 100], ["Zucker", 100], ["Blatt Gelatine", 5]] },
+      { titel: "Geschlagenes Obers", z: [["Obers", 220]] },
+    ] },
+  { name: "Schokomousse", kategorie: "Cremen", stueck: 1,
+    anleitung: "Dotter und Eier mit Kristallzucker und Vanillezucker über Wasserbad auf 70 °C erhitzen und die flüssige Kuvertüre einrühren (bei weißer Kuvertüre die eingeweichte Gelatine gleich mit dazugeben). Das geschlagene Obers unterheben, in ein Gefäß füllen und über Nacht im Kühlschrank fest werden lassen.\nVarianten statt 360 g dunkler Kuvertüre: 380 g Milchkuvertüre oder 400 g weiße Kuvertüre + 6 g Gelatine.",
+    gruppen: [{ z: [["Kuvertüre D.", 360], ["Eier", 100], ["Dotter", 80], ["Kristallzucker", 50], ["Vanillezucker", 10], ["Obers", 500], ["Salz", 2]] }] },
+  { name: "Italienische Buttercreme", kategorie: "Cremen", stueck: 1,
+    anleitung: "Zucker und Eiweiß über Wasserbad auf 70 °C warm schlagen, dann kalt schlagen. Inzwischen Butter schaumig schlagen. Den steifen Schnee unter die Butter heben und so lange verrühren, bis eine homogene Masse entsteht.",
+    gruppen: [{ z: [["Kristallzucker", 250], ["Eiweiß", 250], ["Butter", 500]] }] },
+
+  // ----- Stückdessert -----
+  { name: "Cookies", alias: ["Cookies Hell"], kategorie: "Stückdessert", stueck: 20, teiggewicht: "60 g", backen: "200 °C / 150 °C · 16 min",
+    gruppen: [{ z: [["Dinkelmehl", 400], ["Butter", 250], ["Zucker", 170], ["B. Zucker", 50], ["Schoko Trops", 230], ["Eier", 100], ["Salz", 2], ["Vanille", 5], ["Backpulver", 10]] }] },
+  { name: "Cookies Dunkel", alias: ["Kakao"], kategorie: "Stückdessert", stueck: 20, teiggewicht: "60 g", backen: "200 °C / 150 °C · 16 min",
+    anleitung: "Wie Cookies, aber statt 400 g Dinkelmehl: 310 g Mehl + 90 g Kakao.",
+    gruppen: [{ z: [["Mehl", 310], ["Kakao", 90], ["Butter", 250], ["Zucker", 170], ["B. Zucker", 50], ["Schoko Trops", 230], ["Eier", 100], ["Salz", 2], ["Vanille", 5], ["Backpulver", 10]] }] },
+
+  // ----- Patisserie -----
+  { name: "Birnen Parfait", kategorie: "Patisserie", stueck: 1,
+    gruppen: [
+      { titel: "Birnen", z: [["Birne", 250], ["Zimt", 3], ["Zitrone", 1.5]] },
+      { titel: "Parfaitmasse", z: [["Dotter", 40], ["Zucker", 60], ["Zucker V.", 10], ["Butter", 7]] },
+      { titel: "Zum Schluss", z: [["Obers", 200]] },
+    ] },
+];
+
+// Teile alter Rezepte, die jetzt als Abschnitt im richtigen Rezept stecken
+const VERALTETE_TEILREZEPTE = ["Streusel", "Schneedecke"];
+
+function applyRezeptImport(recipes, materials, columnMap) {
+  if (recipes.some((r) => r.importVersion === REZEPT_IMPORT_VERSION)) {
+    return { recipes, materials, changed: false };
+  }
+  const norm = (s) => (s || "").trim().toLowerCase();
+  let mats = [...materials];
+  const neueRohstoffe = [];
+
+  const resolveMaterial = (excelName) => {
+    const candidates = ZUTAT_ALIAS[excelName] || [excelName];
+    for (const c of candidates) {
+      const hit = mats.find((m) => norm(m.name) === norm(c));
+      if (hit) return hit.id;
+    }
+    const neu = { id: uid(), name: candidates[0], price: 0, unit: "g", mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: extractAllergens(candidates[0]) };
+    mats.push(neu);
+    neueRohstoffe.push(neu.name);
+    return neu.id;
+  };
+
+  let recs = [...recipes];
+  const aktualisiert = [];
+  const neu = [];
+  EXCEL_REZEPTE.forEach((ex) => {
+    const items = [];
+    ex.gruppen.forEach((g) => {
+      g.z.forEach(([zutat, menge]) => {
+        const item = { materialId: resolveMaterial(zutat), menge };
+        if (g.titel) item.gruppe = g.titel;
+        items.push(item);
+      });
+    });
+    const names = [ex.name, ...(ex.alias || [])].map(norm);
+    const idx = recs.findIndex((r) => names.includes(norm(r.name)));
+    const data = {
+      name: ex.name,
+      kategorie: ex.kategorie,
+      ausbringungMenge: 1,
+      ausbringungEinheit: "Ansatz",
+      stueckProAnsatz: ex.stueck || 1,
+      teiggewicht: ex.teiggewicht || "",
+      backen: ex.backen || "",
+      anleitung: ex.anleitung || "",
+      items,
+      importVersion: REZEPT_IMPORT_VERSION,
+    };
+    if (idx >= 0) {
+      recs[idx] = { ...recs[idx], ...data };
+      aktualisiert.push(ex.name);
+    } else {
+      recs.push({ id: uid(), ...data });
+      neu.push(ex.name);
+    }
+  });
+
+  // Knoblauch-Ciabatta folgt dem aktualisierten Dinkel Ciabatta
+  const ciabatta = recs.find((r) => norm(r.name) === "dinkel ciabatta");
+  const kb = mats.find((m) => norm(m.name) === "knoblauchbutter");
+  const kIdx = recs.findIndex((r) => norm(r.name) === "knoblauch dinkelciabatta");
+  if (ciabatta && kb && kIdx >= 0) {
+    recs[kIdx] = {
+      ...recs[kIdx],
+      kategorie: ciabatta.kategorie,
+      stueckProAnsatz: 1,
+      teiggewicht: ciabatta.teiggewicht,
+      anleitung: "Wie Dinkel Ciabatta + 50 g Knoblauchbutter pro Stück.",
+      items: [...ciabatta.items, { materialId: kb.id, menge: 50, gruppe: "Topping" }],
+    };
+  }
+
+  // Alte Bruchstücke entfernen, sofern sie im Bestellung-Tab nicht zugeordnet sind
+  const usedIds = new Set(Object.values(columnMap || {}).map((m) => m && m.recipeId).filter(Boolean));
+  recs = recs.filter((r) => !(VERALTETE_TEILREZEPTE.some((n) => norm(n) === norm(r.name)) && !r.importVersion && !usedIds.has(r.id)));
+
+  return { recipes: recs, materials: mats, changed: true, info: { aktualisiert, neu, neueRohstoffe } };
+}
+
+// ---------- Kleine Helfer für die Rezeptansicht ----------
+const KATEGORIE_EMOJI = {
+  Brot: "🍞",
+  Ciabatter: "🥖",
+  Gebäck: "🥯",
+  "Süßes Gebäck": "🥐",
+  Kuchen: "🍰",
+  Cremen: "🍮",
+  Füllungen: "🫙",
+  Fruchtmischungen: "🍇",
+  Stückdessert: "🍪",
+  Patisserie: "🍐",
+  Torten: "🎂",
+};
+const katEmoji = (k) => KATEGORIE_EMOJI[k] || "🧺";
+
+// Gruppiert die Zutaten eines Rezepts nach ihrem Abschnitt (z.B. "Vorteig", "Hauptteig")
+function groupItems(items) {
+  const groups = [];
+  items.forEach((it) => {
+    const titel = it.gruppe || "";
+    const last = groups[groups.length - 1];
+    if (last && last.titel === titel) last.items.push(it);
+    else groups.push({ titel, items: [it] });
+  });
+  return groups;
+}
+
 // ---------- Small UI helpers ----------
+// Weizenähre aus dem Börni's-Backstube-Logo
+function WheatLogo({ size = 40, color = COL.wheat }) {
+  const grains = [0, 1, 2, 3, 4];
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 48" fill={color} aria-hidden="true">
+      <path d="M21 47 C20 38 20.5 30 22 20" stroke={color} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+      {grains.map((i) => {
+        const y = 34 - i * 6;
+        return (
+          <g key={i}>
+            <ellipse cx={16.5 + i * 0.4} cy={y} rx="3.2" ry="6" transform={`rotate(-32 ${16.5 + i * 0.4} ${y})`} />
+            <ellipse cx={26 + i * 0.1} cy={y - 2} rx="3.2" ry="6" transform={`rotate(28 ${26 + i * 0.1} ${y - 2})`} />
+          </g>
+        );
+      })}
+      <ellipse cx="22.5" cy="6" rx="3" ry="5.5" transform="rotate(8 22.5 6)" />
+    </svg>
+  );
+}
+
+function Brand({ light = false, small = false }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <WheatLogo size={small ? 30 : 42} color={light ? COL.wheat : COL.accent} />
+      <div style={{ fontFamily: "'Zilla Slab', serif", lineHeight: 1, color: light ? "#fff" : COL.crust }}>
+        <div style={{ fontSize: small ? 20 : 26, fontWeight: 700, letterSpacing: "0.02em" }}>BÖRNI´S</div>
+        <div style={{ fontSize: small ? 10.5 : 13, fontWeight: 600, letterSpacing: "0.42em", marginTop: 2 }}>BACKSTUBE</div>
+      </div>
+    </div>
+  );
+}
+
+function begruessung() {
+  const h = new Date().getHours();
+  if (h < 5) return { text: "Frühschicht, Börni?", emoji: "🌙" };
+  if (h < 11) return { text: "Guten Morgen, Börni!", emoji: "☕" };
+  if (h < 14) return { text: "Mahlzeit, Börni!", emoji: "🥪" };
+  if (h < 18) return { text: "Servus, Börni!", emoji: "👋" };
+  return { text: "Guten Abend, Börni!", emoji: "🌙" };
+}
+
+const BAECKER_SPRUECHE = [
+  "Gut Ding braucht Weile – besonders Sauerteig.",
+  "Heute schon den Sauerteig gefüttert?",
+  "Ohne Fleiß kein Kornspitz.",
+  "Wer früh aufsteht, hat die knusprigsten Semmeln.",
+  "Teig ruht, Bäcker nicht.",
+  "Mehl im Haar ist das Make-up des Bäckers.",
+  "Das Leben ist zu kurz für schlechtes Brot.",
+];
+
+const NAV_TABS = [
+  { key: "rohstoffe", label: "Rohstoffe", icon: (p) => <Package {...p} /> },
+  { key: "rezepte", label: "Rezepte", icon: (p) => <ChefHat {...p} /> },
+  { key: "kalkulation", label: "Kalkulation", icon: (p) => <Calculator {...p} /> },
+  { key: "etikett", label: "Etikett", icon: (p) => <Tag {...p} /> },
+  { key: "bestellung", label: "Bestellung", icon: (p) => <ShoppingCart {...p} /> },
+];
+
 function TabButton({ active, onClick, icon: Icon, children }) {
   return (
     <button
@@ -1058,7 +1439,7 @@ function TabButton({ active, onClick, icon: Icon, children }) {
       style={{
         color: active ? "#fff" : COL.inkMuted,
         backgroundColor: active ? COL.accent : "transparent",
-        boxShadow: active ? "0 1px 2px rgba(226,86,75,0.3)" : "none",
+        boxShadow: active ? "0 2px 6px rgba(196,98,45,0.35)" : "none",
       }}
       onMouseEnter={(e) => {
         if (!active) e.currentTarget.style.backgroundColor = "#EFE8D8";
@@ -1076,7 +1457,7 @@ function TabButton({ active, onClick, icon: Icon, children }) {
 function Card({ children, style }) {
   return (
     <div
-      className="rounded-xl p-5"
+      className="rounded-2xl p-5"
       style={{
         backgroundColor: COL.surface,
         border: `1px solid ${COL.line}`,
@@ -1408,9 +1789,13 @@ function SetupScreen({ onReady }) {
       className="min-h-screen w-full flex items-center justify-center px-4"
       style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.ink }}
     >
-      <div className="w-full max-w-md rounded-xl p-6" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
+      <div className="w-full max-w-md">
+      <div className="flex justify-center mb-6">
+        <Brand />
+      </div>
+      <div className="w-full rounded-2xl p-6" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}`, boxShadow: "0 8px 30px rgba(59,42,30,0.08)" }}>
         <h1 className="text-xl mb-1" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
-          Online-Speicher einrichten
+          Servus! 👋 Kurz einrichten
         </h1>
         <p className="text-sm mb-4" style={{ color: COL.inkMuted }}>
           Damit Handy und Laptop dieselben Daten zeigen, brauchst du einmalig einen kostenlosen jsonbin.io-Account.
@@ -1483,6 +1868,7 @@ function SetupScreen({ onReady }) {
           </div>
         )}
       </div>
+      </div>
     </div>
   );
 }
@@ -1493,7 +1879,7 @@ function App() {
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href =
-      "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
+      "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Zilla+Slab:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap";
     document.head.appendChild(link);
     return () => document.head.removeChild(link);
   }, []);
@@ -1512,6 +1898,9 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [syncState, setSyncState] = useState("idle"); // idle | saving | saved | error
   const [syncErrorDetail, setSyncErrorDetail] = useState("");
+  const [importInfo, setImportInfo] = useState(null);
+  const [gruss] = useState(begruessung);
+  const [spruch] = useState(() => BAECKER_SPRUECHE[Math.floor(Math.random() * BAECKER_SPRUECHE.length)]);
   const loadedRef = React.useRef(false);
 
   useEffect(() => {
@@ -1526,17 +1915,27 @@ function App() {
         if (!cancelled) {
           let mats = data.materials || [];
           let recs = data.recipes || [];
+          let existingBackups = loadLocalBackups();
           if (mats.length > 0) {
             const migMat = migrateVorteige(mats);
             mats = migMat.materials;
             const migRec = migrateRecipes(recs, mats);
             recs = migRec.recipes;
+            const imp = applyRezeptImport(recs, mats, data.columnMap);
+            if (imp.changed) {
+              // Vor dem Rezept-Update den bisherigen Stand sichern
+              const vorher = { timestamp: new Date().toISOString(), materials: data.materials, recipes: data.recipes, columnMap: data.columnMap || {}, label: "vor Rezept-Update" };
+              existingBackups = [vorher, ...existingBackups].slice(0, 5);
+              saveLocalBackups(existingBackups);
+              mats = imp.materials;
+              recs = imp.recipes;
+              setImportInfo(imp.info);
+            }
           }
           if (data.materials) setMaterials(mats);
           if (data.recipes) setRecipes(recs);
           if (data.columnMap) setColumnMap(data.columnMap);
           if (data.orderHistory) setOrderHistory(data.orderHistory);
-          const existingBackups = loadLocalBackups();
           setBackups(existingBackups);
 
           // Einmal täglich beim ersten Öffnen automatisch eine Sicherung anlegen (nur lokal, nicht in der Cloud)
@@ -1633,11 +2032,12 @@ function App() {
 
   const resetToDefaults = async () => {
     if (!window.confirm("Wirklich alle Eingaben löschen und auf die ursprünglich importierten Daten zurücksetzen?")) return;
-    setMaterials(seedMaterials);
-    setRecipes(seedRecipes);
+    const imp = applyRezeptImport(seedRecipes, migrateVorteige(seedMaterials).materials, {});
+    setMaterials(imp.materials);
+    setRecipes(imp.recipes);
     if (config) {
       try {
-        await writeBin(config.apiKey, config.binId, { materials: seedMaterials, recipes: seedRecipes });
+        await writeBin(config.apiKey, config.binId, { materials: imp.materials, recipes: imp.recipes });
       } catch (e) {}
     }
   };
@@ -1666,10 +2066,12 @@ function App() {
   if (loading) {
     return (
       <div
-        className="min-h-screen w-full flex items-center justify-center"
+        className="min-h-screen w-full flex flex-col items-center justify-center gap-4"
         style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.inkMuted }}
       >
-        Lade deine Daten…
+        <div style={{ fontSize: 56, animation: "rise 1.6s ease-in-out infinite" }}>🍞</div>
+        <Brand small />
+        <div className="text-sm">Der Ofen heizt vor … deine Daten kommen gleich.</div>
       </div>
     );
   }
@@ -1681,34 +2083,28 @@ function App() {
       className="min-h-screen w-full"
       style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.ink }}
     >
-      <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+      <div className="max-w-5xl mx-auto px-4 pt-4 pb-28 sm:py-8">
         <header className="mb-6">
-          <div className="flex items-center justify-between gap-3 mb-1">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: COL.accent, boxShadow: "0 2px 6px rgba(226,86,75,0.35)" }}
-              >
-                <Package size={19} color="#fff" strokeWidth={2} />
-              </div>
-              <div>
-                <h1
-                  className="text-2xl sm:text-3xl leading-tight"
-                  style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}
-                >
-                  Lager & Rezeptur
-                </h1>
-                <p className="text-sm" style={{ color: COL.inkMuted }}>
-                  Rohstoffe verwalten, Rezepte kalkulieren, Etiketten erstellen.
-                </p>
+          <div
+            className="relative rounded-3xl px-5 py-5 sm:px-7 sm:py-6 z-10"
+            style={{
+              background: `radial-gradient(circle at 85% 20%, rgba(232,182,76,0.28), transparent 45%), linear-gradient(135deg, ${COL.crust} 0%, #5A3A24 100%)`,
+              boxShadow: "0 10px 30px rgba(59,42,30,0.25)",
+            }}
+          >
+            <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none" aria-hidden="true">
+              <div className="absolute -right-6 -bottom-10 opacity-10">
+                <WheatLogo size={180} color={COL.wheat} />
               </div>
             </div>
+          <div className="relative flex items-start justify-between gap-3">
+            <Brand light />
 
             <div className="relative">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <span
-                  className="hidden sm:flex items-center gap-1 text-xs"
-                  style={{ color: syncState === "error" ? COL.warn : COL.inkMuted }}
+                  className="hidden sm:flex items-center gap-1 text-xs px-2.5 py-1 rounded-full"
+                  style={{ color: syncState === "error" ? "#FFD2C2" : "rgba(255,255,255,0.75)", backgroundColor: "rgba(255,255,255,0.08)" }}
                 >
                   {syncState === "saving" && "speichert …"}
                   {syncState === "saved" && (
@@ -1717,15 +2113,16 @@ function App() {
                     </>
                   )}
                   {syncState === "error" && <span title={syncErrorDetail}>Speichern fehlgeschlagen ⓘ</span>}
+                  {syncState === "idle" && "bereit"}
                 </span>
                 <button
                   onClick={() => setShowSettingsMenu((v) => !v)}
-                  className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
-                  style={{ border: `1px solid ${COL.line}`, backgroundColor: showSettingsMenu ? COL.bg : COL.surface, color: COL.ink }}
+                  className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-xl transition-colors"
+                  style={{ border: "1px solid rgba(255,255,255,0.2)", backgroundColor: showSettingsMenu ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)", color: "#fff" }}
+                  aria-label="Einstellungen"
                 >
                   <Settings size={16} />
                   <span className="hidden sm:inline">Einstellungen</span>
-                  <ChevronDown size={14} style={{ color: COL.inkMuted }} />
                 </button>
               </div>
 
@@ -1801,6 +2198,34 @@ function App() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+
+            <div className="relative mt-5">
+              <div className="text-xl sm:text-2xl text-white" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+                {gruss.text} <span style={{ display: "inline-block", animation: "wiggle 2.4s ease-in-out infinite" }}>{gruss.emoji}</span>
+              </div>
+              <div className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.7)", fontStyle: "italic" }}>
+                {spruch}
+              </div>
+              <div className="flex flex-wrap gap-2 mt-4">
+                {[
+                  { label: "Rezepte", value: recipes.length, emoji: "📖", go: "rezepte" },
+                  { label: "Rohstoffe", value: materials.length, emoji: "🌾", go: "rohstoffe" },
+                  lowStock.length ? { label: "knapp", value: lowStock.length, emoji: "⚠️", go: "rohstoffe" } : { label: "alles da", value: "", emoji: "✅", go: "rohstoffe" },
+                ].map((s) => (
+                  <button
+                    key={s.label}
+                    onClick={() => setTab(s.go)}
+                    className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full transition-colors"
+                    style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.15)" }}
+                  >
+                    <span>{s.emoji}</span>
+                    <b>{s.value}</b>
+                    <span style={{ opacity: 0.75 }}>{s.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1890,6 +2315,7 @@ function App() {
                   >
                     <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                       {new Date(b.timestamp).toLocaleString("de-DE")}
+                      {b.label && <span style={{ color: COL.accent, fontFamily: "'IBM Plex Sans', sans-serif" }}> · {b.label}</span>}
                     </span>
                     <button
                       onClick={() => restoreBackup(b)}
@@ -1931,25 +2357,69 @@ function App() {
           </div>
         )}
 
+        {importInfo && (
+          <div
+            className="flex items-start gap-3 text-sm px-4 py-3 rounded-2xl mb-6"
+            style={{ backgroundColor: COL.okSoft, color: COL.ok, border: `1px solid #CFE0C6`, animation: "fadeIn .3s ease" }}
+          >
+            <span className="text-xl">🎉</span>
+            <div className="flex-1">
+              <div className="font-semibold">Rezepte aus deiner Excel übernommen!</div>
+              <div>
+                {importInfo.aktualisiert.length} aktualisiert, {importInfo.neu.length} neu
+                {importInfo.neu.length > 0 && <> ({importInfo.neu.join(", ")})</>}.
+                {importInfo.neueRohstoffe.length > 0 && (
+                  <> Neue Rohstoffe angelegt – bitte Preis & Allergene nachtragen: <b>{importInfo.neueRohstoffe.join(", ")}</b>.</>
+                )}{" "}
+                Der alte Stand liegt unter Einstellungen → Sicherungen.
+              </div>
+            </div>
+            <button onClick={() => setImportInfo(null)} aria-label="Schließen">
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         <nav
-          className="flex flex-wrap gap-1 mb-6 p-1 rounded-xl w-fit"
+          className="hidden sm:flex flex-wrap gap-1 mb-6 p-1 rounded-2xl w-fit"
           style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}
         >
-          <TabButton active={tab === "rohstoffe"} onClick={() => setTab("rohstoffe")} icon={Package}>
-            Rohstoffe
-          </TabButton>
-          <TabButton active={tab === "rezepte"} onClick={() => setTab("rezepte")} icon={ChefHat}>
-            Rezepte
-          </TabButton>
-          <TabButton active={tab === "kalkulation"} onClick={() => setTab("kalkulation")} icon={Calculator}>
-            Kalkulation
-          </TabButton>
-          <TabButton active={tab === "etikett"} onClick={() => setTab("etikett")} icon={Tag}>
-            Etikett
-          </TabButton>
-          <TabButton active={tab === "bestellung"} onClick={() => setTab("bestellung")} icon={ShoppingCart}>
-            Bestellung
-          </TabButton>
+          {NAV_TABS.map((t) => (
+            <TabButton key={t.key} active={tab === t.key} onClick={() => setTab(t.key)} icon={t.icon}>
+              {t.label}
+            </TabButton>
+          ))}
+        </nav>
+
+        <nav
+          className="sm:hidden bottom-nav fixed bottom-0 left-0 right-0 z-20 flex justify-around px-2 pt-2"
+          style={{ backgroundColor: "rgba(255,255,255,0.94)", backdropFilter: "blur(10px)", borderTop: `1px solid ${COL.line}`, boxShadow: "0 -4px 20px rgba(38,32,25,0.06)" }}
+        >
+          {NAV_TABS.map((t) => {
+            const on = tab === t.key;
+            const TabIcon = t.icon;
+            return (
+              <button
+                key={t.key}
+                onClick={() => {
+                  setTab(t.key);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="flex flex-col items-center gap-0.5 px-0.5 py-1 rounded-xl flex-1 min-w-0"
+                style={{ color: on ? COL.accent : COL.inkMuted }}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full transition-all"
+                  style={{ width: 44, height: 28, backgroundColor: on ? COL.accentSoft : "transparent" }}
+                >
+                  <TabIcon size={19} strokeWidth={on ? 2.4 : 2} />
+                </span>
+                <span className="text-[11px]" style={{ fontWeight: on ? 600 : 500 }}>
+                  {t.label}
+                </span>
+              </button>
+            );
+          })}
         </nav>
 
         {tab === "rohstoffe" && <RohstoffeTab materials={materials} setMaterials={setMaterials} />}
@@ -2434,12 +2904,12 @@ function RohstoffeTab({ materials, setMaterials }) {
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
             Lagerliste
           </h2>
           {!form && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setShowScan(true)}
                 className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
@@ -2586,22 +3056,186 @@ function RohstoffeTab({ materials, setMaterials }) {
 }
 
 // ---------- Rezepte Tab ----------
+const fmtG = (n) => (isFinite(n) ? n.toLocaleString("de-DE", { maximumFractionDigits: n < 100 ? 1 : 0 }) : "–");
+const MULTIPLIKATOREN = [1, 2, 3, 4, 5, 10, 15];
+
+function RecipeCard({ r, materials, open, onToggle, onEdit, onDelete }) {
+  const [faktor, setFaktor] = useState(1);
+  const mat = (id) => materials.find((m) => m.id === id);
+  const gesamt = r.items.reduce((s, it) => s + (Number(it.menge) || 0), 0);
+  const stueck = r.stueckProAnsatz || 0;
+  const groups = groupItems(r.items);
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden transition-all"
+      style={{
+        backgroundColor: COL.surface,
+        border: `1px solid ${open ? COL.accent : COL.line}`,
+        boxShadow: open ? "0 6px 24px rgba(120,70,30,0.12)" : "0 1px 2px rgba(38,32,25,0.04)",
+        gridColumn: open ? "1 / -1" : undefined,
+      }}
+    >
+      <button onClick={onToggle} className="w-full text-left p-4 flex items-start gap-3">
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+          style={{ backgroundColor: COL.accentSoft }}
+        >
+          {katEmoji(r.kategorie)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-base leading-tight" style={{ fontFamily: "'Fraunces', serif" }}>
+            {r.name}
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            <Chip>{fmtG(gesamt)} g / Ansatz</Chip>
+            {stueck > 1 && <Chip>{stueck} Stk.</Chip>}
+            {r.teiggewicht && <Chip>⚖️ {r.teiggewicht}</Chip>}
+            {r.backen && <Chip>🔥 {r.backen}</Chip>}
+          </div>
+        </div>
+        <span style={{ display: "inline-flex", transform: open ? "rotate(180deg)" : "none", transition: "transform .2s", color: COL.inkMuted, flexShrink: 0, marginTop: 4 }}><ChevronDown size={18} /></span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4" style={{ animation: "fadeIn .2s ease" }}>
+          <div className="rounded-xl p-3 mb-4 flex flex-wrap items-center gap-2" style={{ backgroundColor: COL.bg }}>
+            <span className="text-sm font-medium mr-1">Menge:</span>
+            {MULTIPLIKATOREN.map((f) => (
+              <button
+                key={f}
+                onClick={() => setFaktor(f)}
+                className="text-sm font-semibold px-3 py-1.5 rounded-full transition-all"
+                style={{
+                  backgroundColor: faktor === f ? COL.accent : COL.surface,
+                  color: faktor === f ? "#fff" : COL.ink,
+                  border: `1px solid ${faktor === f ? COL.accent : COL.line}`,
+                }}
+              >
+                ×{f}
+              </button>
+            ))}
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={faktor}
+              onChange={(e) => setFaktor(Math.max(0, Number(e.target.value) || 0))}
+              style={{ ...inputStyle, width: 70, padding: "5px 8px" }}
+              aria-label="Eigener Faktor"
+            />
+            <span className="text-sm ml-auto" style={{ color: COL.inkMuted }}>
+              {stueck > 0 && <>= <b style={{ color: COL.ink }}>{fmtNum(stueck * faktor, 1)} Stück</b> · </>}
+              <b style={{ color: COL.ink }}>{fmtG(gesamt * faktor)} g</b> Teig
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {groups.map((g, gi) => (
+              <div key={gi}>
+                {g.titel && (
+                  <div className="text-xs font-semibold uppercase mb-1.5" style={{ color: COL.accent, letterSpacing: "0.06em" }}>
+                    {g.titel}
+                  </div>
+                )}
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${COL.line}` }}>
+                  {g.items.map((it, i) => {
+                    const m = mat(it.materialId);
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between px-3 py-2 text-sm"
+                        style={{ backgroundColor: i % 2 ? COL.bg : COL.surface }}
+                      >
+                        <span>{m ? m.name : "(gelöschter Rohstoff)"}</span>
+                        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600 }}>
+                          {fmtG(it.menge * faktor)} {m?.unit || ""}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {r.anleitung && (
+            <div className="mt-4 rounded-xl p-3 text-sm leading-relaxed" style={{ backgroundColor: COL.amberSoft, whiteSpace: "pre-line" }}>
+              <div className="text-xs font-semibold uppercase mb-1" style={{ color: COL.amber, letterSpacing: "0.06em" }}>
+                📝 So geht's
+              </div>
+              {r.anleitung}
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ border: `1px solid ${COL.line}`, color: COL.ink }}
+            >
+              <Pencil size={14} /> Bearbeiten
+            </button>
+            <button
+              onClick={onDelete}
+              className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ border: `1px solid ${COL.line}`, color: COL.warn }}
+            >
+              <Trash2 size={14} /> Löschen
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Chip({ children }) {
+  return (
+    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: COL.bg, color: COL.inkMuted, border: `1px solid ${COL.line}` }}>
+      {children}
+    </span>
+  );
+}
+
 function RezepteTab({ materials, recipes, setRecipes }) {
-  const emptyForm = { name: "", kategorie: "", ausbringungMenge: "", ausbringungEinheit: "Stk", items: [] };
+  const emptyForm = { name: "", kategorie: "", ausbringungMenge: "1", ausbringungEinheit: "Ansatz", stueckProAnsatz: "1", teiggewicht: "", backen: "", anleitung: "", items: [] };
   const categories = useMemo(
     () => [...new Set(recipes.map((r) => r.kategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
     [recipes]
   );
   const [filterKategorie, setFilterKategorie] = useState("Alle");
-  const visibleRecipes = filterKategorie === "Alle" ? recipes : recipes.filter((r) => r.kategorie === filterKategorie);
+  const [suche, setSuche] = useState("");
+  const [openId, setOpenId] = useState(null);
   const [form, setForm] = useState(null);
 
-  const startAdd = () => setForm({ ...emptyForm, items: [{ materialId: materials[0]?.id ?? "", menge: "" }] });
+  const q = suche.trim().toLowerCase();
+  const visibleRecipes = recipes
+    .filter((r) => filterKategorie === "Alle" || r.kategorie === filterKategorie)
+    .filter(
+      (r) =>
+        !q ||
+        r.name.toLowerCase().includes(q) ||
+        r.items.some((it) => (materials.find((m) => m.id === it.materialId)?.name || "").toLowerCase().includes(q))
+    );
+
+  const sortedMaterials = useMemo(() => [...materials].sort((a, b) => a.name.localeCompare(b.name, "de")), [materials]);
+
+  const startAdd = () => setForm({ ...emptyForm, items: [{ materialId: sortedMaterials[0]?.id ?? "", menge: "", gruppe: "" }] });
   const startEdit = (r) =>
-    setForm({ ...r, ausbringungMenge: String(r.ausbringungMenge), items: r.items.map((i) => ({ ...i, menge: String(i.menge) })) });
+    setForm({
+      ...emptyForm,
+      ...r,
+      ausbringungMenge: String(r.ausbringungMenge),
+      stueckProAnsatz: String(r.stueckProAnsatz ?? ""),
+      items: r.items.map((i) => ({ ...i, menge: String(i.menge), gruppe: i.gruppe || "" })),
+    });
   const cancel = () => setForm(null);
 
-  const addRow = () => setForm({ ...form, items: [...form.items, { materialId: materials[0]?.id ?? "", menge: "" }] });
+  const addRow = () => {
+    const lastGruppe = form.items[form.items.length - 1]?.gruppe || "";
+    setForm({ ...form, items: [...form.items, { materialId: sortedMaterials[0]?.id ?? "", menge: "", gruppe: lastGruppe }] });
+  };
   const removeRow = (idx) => setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
   const updateRow = (idx, patch) =>
     setForm({ ...form, items: form.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)) });
@@ -2611,25 +3245,38 @@ function RezepteTab({ materials, recipes, setRecipes }) {
     const clean = {
       ...form,
       ausbringungMenge: Number(form.ausbringungMenge) || 0,
+      stueckProAnsatz: Number(form.stueckProAnsatz) || 0,
       items: form.items
         .filter((i) => i.materialId)
-        .map((i) => ({ materialId: i.materialId, menge: Number(i.menge) || 0 })),
+        .map((i) => {
+          const item = { materialId: i.materialId, menge: Number(i.menge) || 0 };
+          if (i.gruppe && i.gruppe.trim()) item.gruppe = i.gruppe.trim();
+          return item;
+        }),
     };
     if (form.id) {
       setRecipes((prev) => prev.map((r) => (r.id === form.id ? clean : r)));
     } else {
-      setRecipes((prev) => [...prev, { ...clean, id: uid() }]);
+      const id = uid();
+      setRecipes((prev) => [...prev, { ...clean, id }]);
+      setOpenId(id);
     }
     setForm(null);
   };
 
-  const remove = (id) => setRecipes((prev) => prev.filter((r) => r.id !== id));
-  const matName = (id) => materials.find((m) => m.id === id)?.name ?? "(gelöschter Rohstoff)";
+  const remove = (r) => {
+    if (!window.confirm(`Rezept "${r.name}" wirklich löschen?`)) return;
+    setRecipes((prev) => prev.filter((x) => x.id !== r.id));
+  };
   const matUnit = (id) => materials.find((m) => m.id === id)?.unit ?? "";
+  const gruppenVorschlaege = [...new Set(recipes.flatMap((r) => r.items.map((i) => i.gruppe)).filter(Boolean))];
 
   const formPanel = !form ? null : (
-    <div className="mb-5 p-4 rounded-lg" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+    <div className="mb-5 p-4 rounded-2xl" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}` }}>
+      <h3 className="text-lg mb-3" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+        {form.id ? `✏️ ${form.name || "Rezept"} bearbeiten` : "✨ Neues Rezept"}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-3">
         <Field label="Rezeptname">
           <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </Field>
@@ -2662,44 +3309,67 @@ function RezepteTab({ materials, recipes, setRecipes }) {
             value={form.ausbringungEinheit}
             onChange={(e) => setForm({ ...form, ausbringungEinheit: e.target.value })}
           >
-            {[...UNITS, "Portion(en)"].map((u) => (
+            {["Ansatz", ...UNITS, "Portion(en)"].map((u) => (
               <option key={u} value={u}>
                 {u}
               </option>
             ))}
           </select>
         </Field>
+        <Field label="Stück pro Ansatz">
+          <input style={inputStyle} type="number" step="1" value={form.stueckProAnsatz} onChange={(e) => setForm({ ...form, stueckProAnsatz: e.target.value })} />
+        </Field>
+        <Field label="Teiggewicht">
+          <input style={inputStyle} value={form.teiggewicht} onChange={(e) => setForm({ ...form, teiggewicht: e.target.value })} placeholder="z.B. 850 g" />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Backen">
+            <input style={{ ...inputStyle, width: "100%" }} value={form.backen} onChange={(e) => setForm({ ...form, backen: e.target.value })} placeholder="z.B. 180 °C · ca. 45 min" />
+          </Field>
+        </div>
       </div>
 
       <span className="text-sm block mb-2" style={{ color: COL.inkMuted }}>
-        Zutaten (pro Ansatz)
+        Zutaten (pro Ansatz) – „Abschnitt“ ist optional, z.B. Vorteig, Hauptteig, Streusel
       </span>
+      <datalist id="gruppen-liste">
+        {gruppenVorschlaege.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
       <div className="flex flex-col gap-2 mb-3">
         {form.items.map((it, idx) => (
-          <div key={idx} className="flex items-center gap-2">
+          <div key={idx} className="flex flex-wrap sm:flex-nowrap items-center gap-2 p-2 sm:p-0 rounded-lg" style={{ backgroundColor: "transparent" }}>
+            <input
+              style={{ ...inputStyle, width: 130 }}
+              list="gruppen-liste"
+              placeholder="Abschnitt"
+              value={it.gruppe || ""}
+              onChange={(e) => updateRow(idx, { gruppe: e.target.value })}
+            />
             <select
-              style={{ ...inputStyle, flex: 2 }}
+              style={{ ...inputStyle, flex: 2, minWidth: 150 }}
               value={it.materialId}
               onChange={(e) => updateRow(idx, { materialId: e.target.value })}
             >
-              {materials.map((m) => (
+              {sortedMaterials.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
             </select>
             <input
-              style={{ ...inputStyle, flex: 1 }}
+              style={{ ...inputStyle, width: 90 }}
               type="number"
               step="0.001"
               placeholder="Menge"
               value={it.menge}
               onChange={(e) => updateRow(idx, { menge: e.target.value })}
             />
-            <span className="text-xs w-8" style={{ color: COL.inkMuted }}>
+            <span className="text-xs w-6" style={{ color: COL.inkMuted }}>
               {matUnit(it.materialId)}
             </span>
-            <button onClick={() => removeRow(idx)} style={{ color: COL.warn }}>
+            <button onClick={() => removeRow(idx)} style={{ color: COL.warn }} aria-label="Zutat entfernen">
               <X size={16} />
             </button>
           </div>
@@ -2709,103 +3379,122 @@ function RezepteTab({ materials, recipes, setRecipes }) {
         <Plus size={14} /> Zutat hinzufügen
       </button>
 
-      <div className="flex gap-2">
-        <button onClick={save} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+      <Field label="Anleitung / Notizen">
+        <textarea
+          style={{ ...inputStyle, minHeight: 90, resize: "vertical" }}
+          value={form.anleitung}
+          onChange={(e) => setForm({ ...form, anleitung: e.target.value })}
+        />
+      </Field>
+
+      <div className="flex gap-2 mt-4">
+        <button onClick={save} className="text-sm font-medium px-4 py-2 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
           Speichern
         </button>
-        <button onClick={cancel} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+        <button onClick={cancel} className="text-sm font-medium px-4 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
           Abbrechen
         </button>
       </div>
     </div>
   );
 
+  const katButton = (k, label, count) => {
+    const on = filterKategorie === k;
+    return (
+      <button
+        key={k}
+        onClick={() => setFilterKategorie(k)}
+        className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full whitespace-nowrap transition-all"
+        style={{
+          backgroundColor: on ? COL.ink : COL.surface,
+          color: on ? "#fff" : COL.ink,
+          border: `1px solid ${on ? COL.ink : COL.line}`,
+        }}
+      >
+        {label}
+        <span className="text-xs" style={{ opacity: 0.6 }}>
+          {count}
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
             Rezepte
           </h2>
-          {!form && materials.length > 0 && (
-            <button
-              onClick={startAdd}
-              className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
-              style={{ backgroundColor: COL.accent, color: "#fff" }}
-            >
-              <Plus size={15} /> Neues Rezept
-            </button>
+          <p className="text-sm" style={{ color: COL.inkMuted }}>
+            Tippen zum Aufklappen · Menge mit ×2, ×5 … hochrechnen
+          </p>
+        </div>
+        {!form && materials.length > 0 && (
+          <button
+            onClick={startAdd}
+            className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg flex-shrink-0"
+            style={{ backgroundColor: COL.accent, color: "#fff", boxShadow: "0 2px 8px rgba(196,98,45,0.35)" }}
+          >
+            <Plus size={15} /> Neues Rezept
+          </button>
+        )}
+      </div>
+
+      {form && !form.id && formPanel}
+
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base" style={{ opacity: 0.6 }}>
+          🔍
+        </span>
+        <input
+          style={{ ...inputStyle, width: "100%", paddingLeft: 36, paddingTop: 11, paddingBottom: 11, borderRadius: 14, fontSize: 15 }}
+          placeholder="Rezept oder Zutat suchen …"
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+        />
+      </div>
+
+      {categories.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+          {katButton("Alle", "Alle", recipes.length)}
+          {categories.map((c) => katButton(c, `${katEmoji(c)} ${c}`, recipes.filter((r) => r.kategorie === c).length))}
+        </div>
+      )}
+
+      {recipes.length === 0 ? (
+        <Card>
+          <p className="text-sm py-8 text-center" style={{ color: COL.inkMuted }}>
+            🥣 Noch keine Rezepte erfasst.
+          </p>
+        </Card>
+      ) : visibleRecipes.length === 0 ? (
+        <Card>
+          <p className="text-sm py-8 text-center" style={{ color: COL.inkMuted }}>
+            🤷 Nichts gefunden für „{suche}“.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {visibleRecipes.map((r) =>
+            form && form.id === r.id ? (
+              <div key={r.id} style={{ gridColumn: "1 / -1" }}>
+                {formPanel}
+              </div>
+            ) : (
+              <RecipeCard
+                key={r.id}
+                r={r}
+                materials={materials}
+                open={openId === r.id}
+                onToggle={() => setOpenId(openId === r.id ? null : r.id)}
+                onEdit={() => startEdit(r)}
+                onDelete={() => remove(r)}
+              />
+            )
           )}
         </div>
-
-        {form && !form.id && formPanel}
-
-        {recipes.length > 0 && categories.length > 0 && (
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-sm" style={{ color: COL.inkMuted }}>
-              Kategorie:
-            </span>
-            <select style={{ ...inputStyle, maxWidth: 220 }} value={filterKategorie} onChange={(e) => setFilterKategorie(e.target.value)}>
-              <option value="Alle">Alle ({recipes.length})</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c} ({recipes.filter((r) => r.kategorie === c).length})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {recipes.length === 0 ? (
-          <p className="text-sm py-8 text-center" style={{ color: COL.inkMuted }}>
-            Noch keine Rezepte erfasst.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {visibleRecipes.map((r) =>
-              form && form.id === r.id ? (
-                <div key={r.id}>{formPanel}</div>
-              ) : (
-                <div key={r.id} className="p-4 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <span className="font-medium" style={{ fontFamily: "'Fraunces', serif" }}>
-                        {r.name}
-                      </span>
-                      {r.kategorie && (
-                        <span
-                          className="text-xs ml-2 px-1.5 py-0.5 rounded-full"
-                          style={{ backgroundColor: COL.accentSoft, color: COL.accent }}
-                        >
-                          {r.kategorie}
-                        </span>
-                      )}
-                      <span className="text-xs ml-2" style={{ color: COL.inkMuted }}>
-                        ergibt {fmtNum(r.ausbringungMenge)} {r.ausbringungEinheit}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => startEdit(r)} style={{ color: COL.inkMuted }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => remove(r.id)} style={{ color: COL.warn }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                  <ul className="text-sm flex flex-col gap-0.5" style={{ fontFamily: "'IBM Plex Mono', monospace", color: COL.inkMuted }}>
-                    {r.items.map((it, i) => (
-                      <li key={i}>
-                        {fmtNum(it.menge)} {matUnit(it.materialId)} — {matName(it.materialId)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )
-            )}
-          </div>
-        )}
-      </Card>
+      )}
     </div>
   );
 }
@@ -3145,8 +3834,11 @@ function EtikettTab({ materials, recipes }) {
 
   const items = useMemo(() => {
     if (!recipe) return [];
-    return [...recipe.items]
-      .map((it) => ({ ...it, mat: materials.find((m) => m.id === it.materialId) }))
+    // Gleiche Zutat aus mehreren Abschnitten (z.B. Wasser im Vorteig und Hauptteig) nur einmal aufs Etikett
+    const summe = new Map();
+    recipe.items.forEach((it) => summe.set(it.materialId, (summe.get(it.materialId) || 0) + (Number(it.menge) || 0)));
+    return [...summe.entries()]
+      .map(([materialId, menge]) => ({ materialId, menge, mat: materials.find((m) => m.id === materialId) }))
       .filter((it) => it.mat)
       .sort((a, b) => b.menge - a.menge);
   }, [recipe, materials]);

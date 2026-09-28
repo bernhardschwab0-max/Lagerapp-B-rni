@@ -1,12 +1,12 @@
 {
-  "name": "Lager & Rezeptur",
+  "name": "Börnis Backstube – Lager & Rezeptur",
   "short_name": "Lager",
   "description": "Lager- und Rezepturverwaltung für die Bäckerei",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#FBF5EB",
-  "theme_color": "#E2564B",
+  "background_color": "#FAF3E7",
+  "theme_color": "#3B2A1E",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
