@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lager-rezeptur-v2';
+const CACHE_NAME = 'lager-rezeptur-v3';
 
 const APP_SHELL = [
   './',
@@ -42,6 +42,8 @@ self.addEventListener('activate', (event) => {
 // Cache-first, mit Hintergrund-Aktualisierung (stale-while-revalidate) und Netzwerk-Fallback.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Online-Speicher und QR-Codes nie aus dem Cache – sonst sieht man alte Daten
+  if (event.request.url.includes('api.jsonbin.io') || event.request.url.includes('api.qrserver.com')) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {

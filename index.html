@@ -1873,6 +1873,102 @@ function SetupScreen({ onReady }) {
   );
 }
 
+// ---------- Backzettel aus der Bestell-App übernehmen ----------
+const BESTELL_APP_URL = "https://bernhardschwab0-max.github.io/Bestellapp-Boerni/";
+
+// Liest "#backzettel=…" aus der Adresse (bleibt in sessionStorage, falls erst noch eingerichtet werden muss)
+function leseBackzettelAusLink() {
+  try {
+    if (window.location.hash.startsWith("#backzettel=")) {
+      const raw = decodeURIComponent(window.location.hash.slice("#backzettel=".length));
+      sessionStorage.setItem("backzettel_eingang", raw);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    const raw = sessionStorage.getItem("backzettel_eingang");
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return p && p.id && Array.isArray(p.items) ? p : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function BackzettelEingang({ eingang, materials, setMaterials, orderHistory, setOrderHistory, onDone }) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const rows = eingang.items
+    .map((it) => {
+      const mat = materials.find((m) => m.id === it.materialId) || materials.find((m) => norm(m.name) === norm(it.name));
+      return { ...it, mat, needed: Number(it.needed) || 0 };
+    })
+    .filter((r) => r.needed > 0);
+  const unbekannt = rows.filter((r) => !r.mat);
+  const ok = rows.filter((r) => r.mat);
+  const alt = orderHistory.find((h) => h.id === eingang.id);
+
+  const abbuchen = () => {
+    setMaterials((prev) =>
+      prev.map((m) => {
+        const zurueck = alt ? alt.items.find((i) => i.materialId === m.id)?.needed || 0 : 0;
+        const ab = ok.filter((r) => r.mat.id === m.id).reduce((s, r) => s + r.needed, 0);
+        return zurueck || ab ? { ...m, stock: Math.round((m.stock + zurueck - ab) * 1000) / 1000 } : m;
+      })
+    );
+    const entry = {
+      id: eingang.id,
+      appliedAt: new Date().toISOString(),
+      label: eingang.label || "Backzettel (Bestell-App)",
+      items: ok.map((r) => ({ materialId: r.mat.id, needed: r.needed })),
+    };
+    setOrderHistory((prev) => [entry, ...prev.filter((h) => h.id !== eingang.id)].slice(0, 50));
+    onDone(true);
+  };
+
+  return (
+    <div className="mb-6 rounded-2xl p-4 sm:p-5" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}`, boxShadow: "0 8px 30px rgba(196,98,45,0.15)", animation: "fadeIn .3s ease" }}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <div className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>📥 Backzettel aus der Bestell-App</div>
+          <div className="text-sm" style={{ color: COL.inkMuted }}>{eingang.label}</div>
+        </div>
+        <button onClick={() => onDone(false)} style={{ color: COL.inkMuted }} aria-label="Verwerfen"><X size={18} /></button>
+      </div>
+      {alt && (
+        <div className="text-sm px-3 py-2 rounded-lg mb-3" style={{ backgroundColor: COL.amberSoft, color: COL.amber }}>
+          Dieser Backzettel wurde am {new Date(alt.appliedAt).toLocaleString("de-DE")} schon abgebucht. Beim Abbuchen wird der alte Abzug zurückgebucht und durch den neuen ersetzt.
+        </div>
+      )}
+      <div className="rounded-xl overflow-hidden mb-3" style={{ border: `1px solid ${COL.line}` }}>
+        <div className="grid gap-3 text-xs font-semibold uppercase px-3 py-2" style={{ gridTemplateColumns: "1fr auto auto", backgroundColor: COL.bg, color: COL.inkMuted }}>
+          <span>Rohstoff</span><span className="text-right">abbuchen</span><span className="text-right">danach</span>
+        </div>
+        {ok.map((r, i) => {
+          const zurueck = alt ? alt.items.find((x) => x.materialId === r.mat.id)?.needed || 0 : 0;
+          const danach = r.mat.stock + zurueck - r.needed;
+          return (
+            <div key={i} className="grid gap-3 text-sm px-3 py-1.5" style={{ gridTemplateColumns: "1fr auto auto", borderTop: `1px solid ${COL.line}` }}>
+              <span>{r.mat.name}</span>
+              <span className="text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{fmtNum(r.needed, 1)} {r.mat.unit}</span>
+              <span className="text-right" style={{ fontFamily: "'IBM Plex Mono', monospace", color: danach < 0 ? COL.warn : COL.ok }}>{fmtNum(danach, 1)}</span>
+            </div>
+          );
+        })}
+      </div>
+      {unbekannt.length > 0 && (
+        <div className="text-sm mb-3" style={{ color: COL.warn }}>Nicht gefunden (wird ausgelassen): {unbekannt.map((r) => r.name || r.materialId).join(", ")}</div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button onClick={abbuchen} className="text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+          ✅ Vom Lager abbuchen
+        </button>
+        <button onClick={() => onDone(false)} className="text-sm font-medium px-4 py-2.5 rounded-xl" style={{ border: `1px solid ${COL.line}` }}>
+          Nicht jetzt
+        </button>
+      </div>
+      <p className="text-xs mt-2" style={{ color: COL.inkMuted }}>Kann später unter Bestellung → Bestellverlauf rückgängig gemacht werden.</p>
+    </div>
+  );
+}
+
 // ---------- Main App ----------
 function App() {
   useEffect(() => {
@@ -1899,6 +1995,8 @@ function App() {
   const [syncState, setSyncState] = useState("idle"); // idle | saving | saved | error
   const [syncErrorDetail, setSyncErrorDetail] = useState("");
   const [importInfo, setImportInfo] = useState(null);
+  const [eingang, setEingang] = useState(() => leseBackzettelAusLink());
+  const [eingangOk, setEingangOk] = useState(false);
   const [gruss] = useState(begruessung);
   const [spruch] = useState(() => BAECKER_SPRUECHE[Math.floor(Math.random() * BAECKER_SPRUECHE.length)]);
   const loadedRef = React.useRef(false);
@@ -2143,6 +2241,13 @@ function App() {
                   >
                     Neues Gerät einrichten
                   </button>
+                  <a
+                    href={BESTELL_APP_URL}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors flex items-center gap-2"
+                    style={{ color: COL.ink }}
+                  >
+                    🧾 Bestell-App öffnen
+                  </a>
                   <button
                     onClick={() => {
                       setShowBackups(true);
@@ -2354,6 +2459,27 @@ function App() {
               <span className="font-semibold">Bestand knapp: </span>
               {lowStock.map((m) => `${m.name} (${fmtNum(m.stock)} ${m.unit})`).join(", ")}
             </div>
+          </div>
+        )}
+
+        {eingang && materials.length > 0 && (
+          <BackzettelEingang
+            eingang={eingang}
+            materials={materials}
+            setMaterials={setMaterials}
+            orderHistory={orderHistory}
+            setOrderHistory={setOrderHistory}
+            onDone={(abgebucht) => {
+              try { sessionStorage.removeItem("backzettel_eingang"); } catch (e) {}
+              setEingang(null);
+              setEingangOk(abgebucht);
+            }}
+          />
+        )}
+        {eingangOk && (
+          <div className="flex items-center justify-between gap-2 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+            <span>✅ Backzettel vom Lager abgebucht.</span>
+            <button onClick={() => setEingangOk(false)} aria-label="Schließen"><X size={16} /></button>
           </div>
         )}
 
