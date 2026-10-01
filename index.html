@@ -22,6 +22,25 @@
         '\n\nBitte mach einen Screenshot von diesem Text.</div>';
     }
   });
+  // Selbstheilung: Laden die Programmbibliotheken nicht (z.B. kaputter Offline-Speicher),
+  // wird der Offline-Speicher geleert und die Seite einmal neu geladen. Deine Daten bleiben erhalten.
+  window.addEventListener('load', function () {
+    var flag = 'selbstheilung';
+    var ss = null;
+    try { ss = window.sessionStorage; } catch (e) {}
+    if (window.React && window.ReactDOM && window.Babel) { if (ss) ss.removeItem(flag); return; }
+    if (!ss || ss.getItem(flag)) {
+      var root = document.getElementById('root');
+      if (root) root.innerHTML = '<div style="padding:24px;font-family:sans-serif;color:#B3401D;background:#FBEAE2;max-width:500px;margin:60px auto;border-radius:12px;line-height:1.5;text-align:center;">' +
+        '<b>Die App konnte nicht geladen werden.</b><br>Bitte Internetverbindung prüfen und die App neu öffnen.</div>';
+      return;
+    }
+    ss.setItem(flag, '1');
+    var aufgaben = [];
+    if (navigator.serviceWorker) aufgaben.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+    if (window.caches) aufgaben.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+    Promise.all(aufgaben).catch(function () {}).then(function () { location.reload(); });
+  });
 </script>
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
