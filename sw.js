@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lager-rezeptur-v3';
+const CACHE_NAME = 'lager-rezeptur-v4';
 
 const APP_SHELL = [
   './',
@@ -13,6 +13,7 @@ const CDN_ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js',
   'https://cdn.tailwindcss.com',
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
 ];

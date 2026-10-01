@@ -27,6 +27,7 @@
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin="anonymous" integrity="sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1" src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script crossorigin="anonymous" data-tesseract-loader="1" src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script crossorigin="anonymous" data-xlsx-loader="1" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
@@ -1530,7 +1531,13 @@ function getConfig() {
         if (sep > -1) {
           const apiKey = decoded.slice(0, sep);
           const binId = decoded.slice(sep + 1);
-          if (apiKey && binId) {
+          const vorher = localStorage.getItem("jsonbin_binid");
+          // Schutz: ein fremder Link darf die App nicht unbemerkt auf einen anderen Speicher umstellen
+          if (
+            apiKey && binId &&
+            (!vorher || vorher === binId ||
+              window.confirm("Achtung: Dieser Link verbindet die App mit einem ANDEREN Online-Speicher.\n\nNur bestätigen, wenn der Link von deinem eigenen Gerät stammt. Fortfahren?"))
+          ) {
             saveConfig(apiKey, binId);
           }
         }
@@ -1744,6 +1751,23 @@ function VersionRecoveryPanel({ config, onRestore, onClose }) {
       )}
     </div>
   );
+}
+
+// QR-Code wird direkt auf dem Gerät erzeugt – der Einrichtungs-Link (mit Schlüssel) verlässt das Gerät nicht
+function QrCode({ text, size = 220 }) {
+  const src = useMemo(() => {
+    try {
+      const qr = qrcode(0, "M");
+      qr.addData(text);
+      qr.make();
+      const zelle = Math.max(2, Math.floor(size / (qr.getModuleCount() + 8)));
+      return qr.createDataURL(zelle, zelle * 4);
+    } catch (e) {
+      return null;
+    }
+  }, [text, size]);
+  if (!src) return <p className="text-xs" style={{ color: COL.warn }}>QR-Code konnte nicht erzeugt werden – bitte den Link unten verwenden.</p>;
+  return <img src={src} width={size} height={size} alt="QR-Code zum Einrichten" style={{ imageRendering: "pixelated", borderRadius: 8, border: `1px solid ${COL.line}` }} />;
 }
 
 function SetupScreen({ onReady }) {
@@ -2349,13 +2373,7 @@ function App() {
                 dann automatisch ein, ganz ohne Code abzutippen.
               </p>
               <div className="flex flex-col items-center gap-3">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(makeSetupUrl(config.apiKey, config.binId))}`}
-                  alt="QR-Code zum Einrichten"
-                  width={240}
-                  height={240}
-                  style={{ borderRadius: 8, border: `1px solid ${COL.line}` }}
-                />
+                <QrCode text={makeSetupUrl(config.apiKey, config.binId)} size={240} />
                 <p className="text-xs text-center" style={{ color: COL.inkMuted, maxWidth: 320 }}>
                   Geht die Kamera nicht? Kopier stattdessen diesen Link und öffne ihn auf dem anderen Gerät:
                 </p>
