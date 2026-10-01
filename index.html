@@ -503,29 +503,36 @@ const fmtEUR = (n) => (isFinite(n) ? n.toLocaleString("de-DE", { style: "currenc
 // Löst "virtuelle" Rohstoffe (z.B. Sauerteig = Mehl+Wasser) rekursiv in echte, gelagerte Rohstoffe auf.
 // Findet/erzeugt zu bestehenden Rohstoffen (per Namensabgleich, unabhängig von IDs) die passende
 // Vorteig-Auflösung, damit ältere, schon eingerichtete Lager automatisch nachgerüstet werden.
+// Zusammensetzung der Vorstufen. Bei mehreren Namen gilt der erste vorhandene Rohstoff
+// (z.B. "Roggen 960" oder – falls gelöscht – "Roggenmehl 960").
+const VORSTUFEN_DEFS = [
+  { match: ["Sauerteig D."], teile: [[["Dinkelmehl"], 0.5], [["Wasser"], 0.5]] },
+  { match: ["Sauerteig R."], teile: [[["Roggen 960", "Roggenmehl 960"], 0.5], [["Wasser"], 0.5]] },
+  { match: ["Dinkel K.", "Kochstück D.", "Kochstück D"], teile: [[["Wasser"], 0.8], [["Dinkelmehl"], 0.2]] },
+  { match: ["Roggen K.", "Kochstück R.", "Kochstück R"], teile: [[["Wasser"], 0.806452], [["Roggen 960", "Roggenmehl 960"], 0.193548]] },
+  { match: ["Kochstück RS.", "Kochstück RS"], teile: [[["Wasser"], 0.75], [["Roggenschrot"], 0.25]] },
+  { match: ["Knoblauchbutter"], teile: [[["Butter"], 0.851064], [["Knoblauch"], 0.13617], [["Salz"], 0.002553], [["Oregano"], 0.008511], [["Pfeffer"], 0.001702]] },
+];
+const findByName = (list, names) =>
+  list.find((m) => names.some((n) => m.name.trim().toLowerCase() === n.toLowerCase()));
+const findVorstufenDef = (name) =>
+  VORSTUFEN_DEFS.find((d) => d.match.some((n) => n.toLowerCase() === (name || "").trim().toLowerCase()));
+function baueVorstufenTeile(def, materials, selbstId) {
+  return def.teile
+    .map(([namen, anteil]) => {
+      const target = findByName(materials, namen);
+      return target && target.id !== selbstId ? { materialId: target.id, anteil } : null;
+    })
+    .filter(Boolean);
+}
+
 function migrateVorteige(materials) {
-  const findByName = (list, names) =>
-    list.find((m) => names.some((n) => m.name.trim().toLowerCase() === n.toLowerCase()));
-
-  const defs = [
-    { match: ["Sauerteig D."], teile: [["Dinkelmehl", 0.5], ["Wasser", 0.5]] },
-    { match: ["Sauerteig R."], teile: [["Roggen 960", 0.5], ["Wasser", 0.5]] },
-    { match: ["Dinkel K.", "Kochstück D.", "Kochstück D"], teile: [["Wasser", 0.8], ["Dinkelmehl", 0.2]] },
-    { match: ["Roggen K.", "Kochstück R.", "Kochstück R"], teile: [["Wasser", 0.806452], ["Roggen 960", 0.193548]] },
-    { match: ["Kochstück RS.", "Kochstück RS"], teile: [["Wasser", 0.75], ["Roggenschrot", 0.25]] },
-  ];
-
   let changed = false;
   let updated = materials.map((m) => {
     if (m.vorteig) return m;
-    const def = defs.find((d) => d.match.some((n) => n.toLowerCase() === m.name.trim().toLowerCase()));
-    if (!def) return m;
-    const teile = def.teile
-      .map(([matName, anteil]) => {
-        const target = findByName(materials, [matName]);
-        return target && target.id !== m.id ? { materialId: target.id, anteil } : null;
-      })
-      .filter(Boolean);
+    const def = findVorstufenDef(m.name);
+    if (!def || def.match.includes("Knoblauchbutter")) return m;
+    const teile = baueVorstufenTeile(def, materials, m.id);
     if (teile.length === 0) return m;
     changed = true;
     return { ...m, vorteig: { teile } };
@@ -566,6 +573,50 @@ function migrateVorteige(materials) {
   }
 
   return { materials: updated, changed };
+}
+
+// Repariert Verweise auf gelöschte Rohstoffe (z.B. nach dem Löschen eines doppelten "Roggen 960"):
+// - Vorstufen (Sauerteig, Kochstück …) werden aus VORSTUFEN_DEFS neu zusammengesetzt
+// - Excel-Rezepte bekommen die passende Zutat wieder (Position im Rezept + ZUTAT_ALIAS)
+// Liefert, was repariert wurde und was nur von Hand behoben werden kann.
+function repariereVerweise(materials, recipes) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const ids = new Set(materials.map((m) => m.id));
+  const repariert = [];
+  const offen = [];
+
+  const mats = materials.map((m) => {
+    const teile = m.vorteig?.teile || [];
+    if (!teile.some((t) => !ids.has(t.materialId))) return m;
+    const def = findVorstufenDef(m.name);
+    const neu = def ? baueVorstufenTeile(def, materials, m.id) : [];
+    if (def && neu.length === def.teile.length) {
+      repariert.push(m.name);
+      return { ...m, vorteig: { teile: neu } };
+    }
+    offen.push(m.name);
+    return m;
+  });
+
+  const recs = recipes.map((r) => {
+    if (!r.items.some((it) => !ids.has(it.materialId))) return r;
+    const ex = EXCEL_REZEPTE.find((e) => [e.name, ...(e.alias || [])].map(norm).includes(norm(r.name)));
+    const flach = ex ? ex.gruppen.flatMap((g) => g.z) : [];
+    let allesGut = true;
+    const items = r.items.map((it, i) => {
+      if (ids.has(it.materialId)) return it;
+      const zutat = flach[i] && Math.abs(flach[i][1] - it.menge) < 0.01 ? flach[i][0] : null;
+      const kandidaten = zutat ? ZUTAT_ALIAS[zutat] || [zutat] : [];
+      const target = findByName(mats, kandidaten);
+      if (target) return { ...it, materialId: target.id };
+      allesGut = false;
+      return it;
+    });
+    (allesGut ? repariert : offen).push(r.name);
+    return { ...r, items };
+  });
+
+  return { materials: mats, recipes: recs, repariert, offen };
 }
 
 // Legt das Rezept "Knoblauch Dinkelciabatta" automatisch an (Kopie von "Dinkel Ciabatta" + Knoblauchbutter-Topping),
@@ -2038,6 +2089,7 @@ function App() {
   const [syncState, setSyncState] = useState("idle"); // idle | saving | saved | error
   const [syncErrorDetail, setSyncErrorDetail] = useState("");
   const [importInfo, setImportInfo] = useState(null);
+  const [verweisInfo, setVerweisInfo] = useState(null);
   const [eingang, setEingang] = useState(() => leseBackzettelAusLink());
   const [eingangOk, setEingangOk] = useState(false);
   const [gruss] = useState(begruessung);
@@ -2072,6 +2124,10 @@ function App() {
               recs = imp.recipes;
               setImportInfo(imp.info);
             }
+            const rep = repariereVerweise(mats, recs);
+            mats = rep.materials;
+            recs = rep.recipes;
+            if (rep.repariert.length || rep.offen.length) setVerweisInfo(rep);
           }
           if (data.materials) setMaterials(mats);
           if (data.recipes) setRecipes(recs);
@@ -2520,6 +2576,30 @@ function App() {
           </div>
         )}
 
+        {verweisInfo && (
+          <div
+            className="flex items-start gap-3 text-sm px-4 py-3 rounded-2xl mb-6"
+            style={{ backgroundColor: verweisInfo.offen.length ? COL.warnSoft : COL.okSoft, color: verweisInfo.offen.length ? COL.warn : COL.ok, animation: "fadeIn .3s ease" }}
+          >
+            <span className="text-xl">🔧</span>
+            <div className="flex-1">
+              {verweisInfo.repariert.length > 0 && (
+                <div>
+                  <b>Repariert:</b> {verweisInfo.repariert.join(", ")} – hier fehlte ein gelöschter Rohstoff, er wurde automatisch ersetzt.
+                </div>
+              )}
+              {verweisInfo.offen.length > 0 && (
+                <div>
+                  <b>Bitte prüfen:</b> {verweisInfo.offen.join(", ")} enthält einen gelöschten Rohstoff. Im Rezept bearbeiten und die Zutat neu auswählen.
+                </div>
+              )}
+            </div>
+            <button onClick={() => setVerweisInfo(null)} aria-label="Schließen">
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         {importInfo && (
           <div
             className="flex items-start gap-3 text-sm px-4 py-3 rounded-2xl mb-6"
@@ -2585,7 +2665,7 @@ function App() {
           })}
         </nav>
 
-        {tab === "rohstoffe" && <RohstoffeTab materials={materials} setMaterials={setMaterials} />}
+        {tab === "rohstoffe" && <RohstoffeTab materials={materials} setMaterials={setMaterials} recipes={recipes} setRecipes={setRecipes} />}
         {tab === "rezepte" && (
           <RezepteTab materials={materials} recipes={recipes} setRecipes={setRecipes} />
         )}
@@ -2947,7 +3027,7 @@ function InvoiceScanPanel({ materials, setMaterials, onClose }) {
   );
 }
 
-function RohstoffeTab({ materials, setMaterials }) {
+function RohstoffeTab({ materials, setMaterials, recipes = [], setRecipes }) {
   const emptyForm = { name: "", price: "", priceKg: "", unit: "g", stock: "", mindestbestand: "", zusatzstoffe: "", allergene: [] };
   const [form, setForm] = useState(null);
   const [search, setSearch] = useState("");
@@ -2999,7 +3079,82 @@ function RohstoffeTab({ materials, setMaterials }) {
     setForm(null);
   };
 
-  const remove = (id) => setMaterials((prev) => prev.filter((m) => m.id !== id));
+  // Löschen nur mit Rückfrage. Wird der Rohstoff noch in Rezepten oder Vorstufen (Sauerteig …) verwendet,
+  // muss ein Ersatz gewählt werden – sonst würde er beim Abbuchen einfach fehlen.
+  const [loeschen, setLoeschen] = useState(null); // { mat, verwendung, ersatzId, bestandDazu }
+  const loeschRef = React.useRef(null);
+  useEffect(() => {
+    if (loeschen) loeschRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [loeschen?.mat?.id]);
+  const verwendung = (id) => [
+    ...recipes.filter((r) => r.items.some((i) => i.materialId === id)).map((r) => r.name),
+    ...materials.filter((m) => m.vorteig?.teile?.some((t) => t.materialId === id)).map((m) => m.name),
+  ];
+  const remove = (id) => {
+    const mat = materials.find((m) => m.id === id);
+    if (!mat) return;
+    const v = verwendung(id);
+    if (v.length === 0) {
+      if (window.confirm(`Rohstoff „${mat.name}“ wirklich löschen?`)) setMaterials((prev) => prev.filter((m) => m.id !== id));
+      return;
+    }
+    const andere = materials.filter((m) => m.id !== id && !m.vorteig);
+    const vorschlag = findBestMatch(mat.name, andere).match;
+    setLoeschen({ mat, verwendung: v, ersatzId: vorschlag?.id || "", bestandDazu: true });
+  };
+  const ersetzenUndLoeschen = () => {
+    const { mat, ersatzId, bestandDazu } = loeschen;
+    if (!ersatzId) return;
+    setRecipes((prev) => prev.map((r) => (r.items.some((i) => i.materialId === mat.id) ? { ...r, items: r.items.map((i) => (i.materialId === mat.id ? { ...i, materialId: ersatzId } : i)) } : r)));
+    setMaterials((prev) =>
+      prev
+        .filter((m) => m.id !== mat.id)
+        .map((m) => {
+          let n = m;
+          if (m.vorteig?.teile?.some((t) => t.materialId === mat.id)) {
+            n = { ...m, vorteig: { teile: m.vorteig.teile.map((t) => (t.materialId === mat.id ? { ...t, materialId: ersatzId } : t)) } };
+          }
+          if (bestandDazu && n.id === ersatzId) n = { ...n, stock: Math.round(((n.stock || 0) + (mat.stock || 0)) * 1000) / 1000 };
+          return n;
+        })
+    );
+    setLoeschen(null);
+  };
+
+  const loeschPanel = loeschen && (
+    <div ref={loeschRef} className="mb-4 p-4 rounded-2xl" style={{ backgroundColor: COL.warnSoft, border: `1px solid ${COL.warn}`, animation: "fadeIn .2s ease" }}>
+      <div className="font-semibold mb-1" style={{ color: COL.warn }}>„{loeschen.mat.name}“ wird noch verwendet</div>
+      <p className="text-sm mb-3">
+        In: <b>{loeschen.verwendung.join(", ")}</b>. Wähle, durch welchen Rohstoff er dort ersetzt werden soll – dann wird er gelöscht.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span className="text-sm">Ersetzen durch</span>
+        <select style={{ ...inputStyle, minWidth: 200 }} value={loeschen.ersatzId} onChange={(e) => setLoeschen({ ...loeschen, ersatzId: e.target.value })}>
+          <option value="">– bitte wählen –</option>
+          {materials
+            .filter((m) => m.id !== loeschen.mat.id && !m.vorteig)
+            .sort((a, b) => a.name.localeCompare(b.name, "de"))
+            .map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+        </select>
+      </div>
+      {loeschen.mat.stock > 0 && (
+        <label className="flex items-center gap-2 text-sm mb-3">
+          <input type="checkbox" checked={loeschen.bestandDazu} onChange={(e) => setLoeschen({ ...loeschen, bestandDazu: e.target.checked })} />
+          Bestand ({fmtNum(loeschen.mat.stock)} {loeschen.mat.unit}) zum Ersatz dazuzählen
+        </label>
+      )}
+      <div className="flex gap-2">
+        <button onClick={ersetzenUndLoeschen} disabled={!loeschen.ersatzId} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ backgroundColor: COL.warn, color: "#fff", opacity: loeschen.ersatzId ? 1 : 0.5 }}>
+          Ersetzen & löschen
+        </button>
+        <button onClick={() => setLoeschen(null)} className="text-sm font-medium px-3 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}`, backgroundColor: "#fff" }}>
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
 
   const formPanel = !form ? null : (
     <div className="mb-1 p-4 rounded-lg" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
@@ -3102,6 +3257,8 @@ function RohstoffeTab({ materials, setMaterials }) {
         {showPriceImport && (
           <PreiseImportPanel materials={materials} setMaterials={setMaterials} onClose={() => setShowPriceImport(false)} />
         )}
+
+        {loeschPanel}
 
         {!form && materials.length > 5 && (
           <input
