@@ -1133,7 +1133,7 @@ const seedRecipes = [
 // damit Zuordnungen im Bestellung-Tab erhalten bleiben.
 // Import in Schritten: jeder Schritt läuft genau einmal und übernimmt nur die Rezepte mit passendem "seit"
 // (ohne "seit" = erster Schritt). So werden in der App geänderte Rezepte später nicht überschrieben.
-const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10"];
+const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10", "app-2026-10-weckerl"];
 
 // Excel-Zutatenname -> mögliche Rohstoff-Namen in der App (erster Treffer gewinnt, sonst wird der erste neu angelegt)
 const ZUTAT_ALIAS = {
@@ -1252,6 +1252,26 @@ const EXCEL_REZEPTE = [
     gruppen: [
       { z: [["Topfen", 16], ["Kochstück D.", 15], ["Roggen 960", 10], ["Dinkelmehl", 40], ["Wasser", 18], ["Dinkelmalz", 1], ["Kürbiskerne gehackt", 5], ["Kürbiskern Öl", 5], ["Salz", 1.1], ["Trockenhefe", 0.4]] },
       { titel: "Bestreuung", z: [["Hagelsalz", 1.5], ["Kürbiskerne gehackt", 7]] },
+    ] },
+
+  // Weckerl aus 100 g Semmelteig (Semmelteig-Rezept auf 100 g umgerechnet) + Belag – Angaben von Börni
+  { name: "Käseweckerl", kategorie: "Gebäck", stueck: 1, seit: "app-2026-10-weckerl",
+    teiggewicht: "100 g Semmelteig + ca. 30 g Käse",
+    gruppen: [
+      { titel: "Semmelteig", z: [["Dinkelmehl", 53.3], ["Wasser", 17.1], ["Kochstück D.", 16.3], ["Kochstück R.", 9.8], ["Malz", 1.5], ["Trockenhefe", 0.8], ["Salz", 1.2]] },
+      { titel: "Belag", z: [["Käse", 30]] },
+    ] },
+  { name: "Speckweckerl", kategorie: "Gebäck", stueck: 1, seit: "app-2026-10-weckerl",
+    teiggewicht: "100 g Semmelteig + 20 g Speck",
+    gruppen: [
+      { titel: "Semmelteig", z: [["Dinkelmehl", 53.3], ["Wasser", 17.1], ["Kochstück D.", 16.3], ["Kochstück R.", 9.8], ["Malz", 1.5], ["Trockenhefe", 0.8], ["Salz", 1.2]] },
+      { titel: "Belag", z: [["Speck", 20]] },
+    ] },
+  { name: "Schinken-Käse-Weckerl", kategorie: "Gebäck", stueck: 1, seit: "app-2026-10-weckerl",
+    teiggewicht: "100 g Semmelteig + 20 g Schinken + 35 g Käse",
+    gruppen: [
+      { titel: "Semmelteig", z: [["Dinkelmehl", 53.3], ["Wasser", 17.1], ["Kochstück D.", 16.3], ["Kochstück R.", 9.8], ["Malz", 1.5], ["Trockenhefe", 0.8], ["Salz", 1.2]] },
+      { titel: "Belag", z: [["Schinken", 20], ["Käse", 35]] },
     ] },
 
   // ----- Füllungen -----
