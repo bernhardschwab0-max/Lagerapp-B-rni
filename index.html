@@ -1127,11 +1127,13 @@ const seedRecipes = [
   },
 ];
 
-// ---------- Rezept-Import aus "Rezepte Neu EXEL.xlsx" (Stand September 2026) ----------
+// ---------- Rezept-Import aus "Rezepte Neu EXEL.xlsx" ----------
 // Mengen = Spalte B der Excel (= 1 Ansatz). "stueck" = Anzahl Stück pro Ansatz laut Excel.
 // Bestehende Rezepte werden per Name (oder altem Namen in "alias") gefunden und behalten ihre ID,
 // damit Zuordnungen im Bestellung-Tab erhalten bleiben.
-const REZEPT_IMPORT_VERSION = "excel-2026-09";
+// Import in Schritten: jeder Schritt läuft genau einmal und übernimmt nur die Rezepte mit passendem "seit"
+// (ohne "seit" = erster Schritt). So werden in der App geänderte Rezepte später nicht überschrieben.
+const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10"];
 
 // Excel-Zutatenname -> mögliche Rohstoff-Namen in der App (erster Treffer gewinnt, sonst wird der erste neu angelegt)
 const ZUTAT_ALIAS = {
@@ -1154,6 +1156,9 @@ const ZUTAT_ALIAS = {
   "Wallnüsse": ["Walnüsse", "Wallnüsse"],
   "Orangat": ["Orangeat", "Orangat"],
   "Kuvertüre D.": ["Kuvertüre D.", "Dunkle K."],
+  "Kürbiskern Öl": ["Kürbiskernöl", "Kürbiskern Öl"],
+  "Kürbiskerne gehackt": ["Kürbiskerne gehackt", "Kürbiskerne"],
+  "Äpfel": ["Äpfel", "Apfel"],
 };
 
 const EXCEL_REZEPTE = [
@@ -1192,6 +1197,14 @@ const EXCEL_REZEPTE = [
   { name: "Kletzenbrot", kategorie: "Brot", stueck: 1, teiggewicht: "580 g (inkl. Früchtemischung)",
     anleitung: "Alle Zutaten + Früchtemischung mischen. Nicht getrennt mischen.",
     gruppen: [{ z: [["Roggen 960", 62.62], ["Roggen 2500", 22.22], ["Wasser", 27.47], ["Sauerteig R.", 68.68], ["Trockengerm", 1], ["Salz", 3.69]] }] },
+
+  { name: "Nussbrot", kategorie: "Brot", stueck: 1, seit: "excel-2026-10",
+    teiggewicht: "1.050 g Bauernbrotteig + 200 g Walnüsse",
+    anleitung: "1.050 g fertigen Bauernbrotteig abwiegen und 200 g Walnüsse unterkneten.",
+    gruppen: [
+      { titel: "Bauernbrotteig", z: [["Roggen 960", 285.1], ["Dinkelmehl", 149.4], ["Wasser", 253.4], ["Sauerteig R.", 344], ["Trockengerm", 2.7], ["Salz", 15.4]] },
+      { titel: "Zugabe", z: [["Wallnüsse", 200]] },
+    ] },
 
   // ----- Fruchtmischungen -----
   { name: "Früchtemischung Kletzenbrot", alias: ["Früchtemischung Ketzenbrot"], kategorie: "Fruchtmischungen", stueck: 1,
@@ -1234,11 +1247,24 @@ const EXCEL_REZEPTE = [
       { titel: "Teig", z: [["Dinkelmehl", 218], ["Wasser", 60], ["Kochstück D.", 40], ["Salz", 7], ["Trockenhefe", 1], ["Dinkelmalz", 6]] },
     ] },
 
+  { name: "Topfen-Kürbis", kategorie: "Gebäck", stueck: 1, seit: "excel-2026-10",
+    teiggewicht: "ca. 112 g + 8,5 g Bestreuung",
+    gruppen: [
+      { z: [["Topfen", 16], ["Kochstück D.", 15], ["Roggen 960", 10], ["Dinkelmehl", 40], ["Wasser", 18], ["Dinkelmalz", 1], ["Kürbiskerne gehackt", 5], ["Kürbiskern Öl", 5], ["Salz", 1.1], ["Trockenhefe", 0.4]] },
+      { titel: "Bestreuung", z: [["Hagelsalz", 1.5], ["Kürbiskerne gehackt", 7]] },
+    ] },
+
   // ----- Füllungen -----
-  { name: "Mohnfülle", kategorie: "Füllungen", stueck: 1,
-    teiggewicht: "80 g Fülle pro Kipferl (110 g)",
+  { name: "Mohnfülle", kategorie: "Füllungen", stueck: 1, seit: "excel-2026-10",
+    teiggewicht: "80 g Fülle pro Mohnkipferl (80 g Brioche)",
     anleitung: "Milch aufkochen lassen und über alle Zutaten leeren.\nBestreuung: 6 g Mohn G. pro Kipferl.",
     gruppen: [{ z: [["Mohn G.", 308], ["Milch", 189], ["MarillenM.", 77], ["Powidell", 154], ["Zucker", 61], ["Zimt", 3], ["Rum", 10]] }] },
+  { name: "Apfelfülle Zimtschnecken", kategorie: "Füllungen", stueck: 1, seit: "excel-2026-10",
+    teiggewicht: "56,9 g Fülle + 2,75 g Zimtzucker pro Apfelschnecke (125 g Brioche)",
+    gruppen: [
+      { z: [["Butter", 12.5], ["Zucker", 10.5], ["Äpfel", 31.5], ["Zimt", 0.4], ["Dinkelbrösel", 2]] },
+      { titel: "Bestreuung", z: [["Zimt", 0.25], ["Zucker", 2.5]] },
+    ] },
 
   // ----- Süßes Gebäck -----
   { name: "Mürbe Kipferl", kategorie: "Süßes Gebäck", stueck: 1, teiggewicht: "110 g",
@@ -1338,7 +1364,9 @@ const EXCEL_REZEPTE = [
 const VERALTETE_TEILREZEPTE = ["Streusel", "Schneedecke"];
 
 function applyRezeptImport(recipes, materials, columnMap) {
-  if (recipes.some((r) => r.importVersion === REZEPT_IMPORT_VERSION)) {
+  // Bis zu welchem Schritt ist schon importiert? (höchste importVersion in den Rezepten)
+  const stand = Math.max(-1, ...recipes.map((r) => IMPORT_SCHRITTE.indexOf(r.importVersion)));
+  if (stand >= IMPORT_SCHRITTE.length - 1) {
     return { recipes, materials, changed: false };
   }
   const norm = (s) => (s || "").trim().toLowerCase();
@@ -1360,7 +1388,9 @@ function applyRezeptImport(recipes, materials, columnMap) {
   let recs = [...recipes];
   const aktualisiert = [];
   const neu = [];
-  EXCEL_REZEPTE.forEach((ex) => {
+  for (let schritt = stand + 1; schritt < IMPORT_SCHRITTE.length; schritt++) {
+  const version = IMPORT_SCHRITTE[schritt];
+  EXCEL_REZEPTE.filter((ex) => (ex.seit || IMPORT_SCHRITTE[0]) === version).forEach((ex) => {
     const items = [];
     ex.gruppen.forEach((g) => {
       g.z.forEach(([zutat, menge]) => {
@@ -1381,17 +1411,19 @@ function applyRezeptImport(recipes, materials, columnMap) {
       backen: ex.backen || "",
       anleitung: ex.anleitung || "",
       items,
-      importVersion: REZEPT_IMPORT_VERSION,
+      importVersion: version,
     };
     if (idx >= 0) {
       recs[idx] = { ...recs[idx], ...data };
-      aktualisiert.push(ex.name);
+      if (!aktualisiert.includes(ex.name) && !neu.includes(ex.name)) aktualisiert.push(ex.name);
     } else {
       recs.push({ id: uid(), ...data });
       neu.push(ex.name);
     }
   });
+  if (schritt > 0) continue;
 
+  // ---- nur beim ersten Schritt ----
   // Knoblauch-Ciabatta folgt dem aktualisierten Dinkel Ciabatta
   const ciabatta = recs.find((r) => norm(r.name) === "dinkel ciabatta");
   const kb = mats.find((m) => norm(m.name) === "knoblauchbutter");
@@ -1410,6 +1442,7 @@ function applyRezeptImport(recipes, materials, columnMap) {
   // Alte Bruchstücke entfernen, sofern sie im Bestellung-Tab nicht zugeordnet sind
   const usedIds = new Set(Object.values(columnMap || {}).map((m) => m && m.recipeId).filter(Boolean));
   recs = recs.filter((r) => !(VERALTETE_TEILREZEPTE.some((n) => norm(n) === norm(r.name)) && !r.importVersion && !usedIds.has(r.id)));
+  }
 
   return { recipes: recs, materials: mats, changed: true, info: { aktualisiert, neu, neueRohstoffe } };
 }
