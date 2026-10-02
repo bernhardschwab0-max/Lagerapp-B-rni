@@ -2096,6 +2096,101 @@ function BackzettelEingang({ eingang, materials, setMaterials, orderHistory, set
   );
 }
 
+// ---------- Abgleich zwischen Handy und Laptop ----------
+// Jedes Gerät merkt sich den zuletzt geladenen/gespeicherten Stand ("Basis"). Hat inzwischen ein anderes
+// Gerät gespeichert, werden beim Speichern beide Änderungen zusammengeführt statt überschrieben.
+const GERAET = (() => {
+  let id = "";
+  try {
+    id = localStorage.getItem("geraet_id") || "";
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 7);
+      localStorage.setItem("geraet_id", id);
+    }
+  } catch (e) {}
+  const art = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "Handy" : "PC";
+  return { id, art };
+})();
+const neuerStand = () => ({ zeit: new Date().toISOString(), geraet: GERAET.id, art: GERAET.art });
+const ohneStand = (rec) => {
+  if (!rec || typeof rec !== "object") return rec;
+  const { _stand, ...rest } = rec;
+  return rest;
+};
+const gleichJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const hatIds = (arr) => Array.isArray(arr) && arr.every((x) => x && typeof x === "object" && x.id != null);
+
+// Drei-Wege-Abgleich: basis = gemeinsamer Ausgangsstand, mein = dieses Gerät, dein = Speicher (anderes Gerät)
+function abgleichen(basis, mein, dein, schluessel) {
+  if (gleichJson(mein, basis)) return dein;
+  if (dein === undefined || gleichJson(dein, basis) || gleichJson(mein, dein)) return mein;
+  // Lagerbestand: Änderungen beider Geräte zusammenrechnen (z.B. zwei Abbuchungen)
+  if (schluessel === "stock" && [basis, mein, dein].every((v) => typeof v === "number")) {
+    return Math.round((dein + (mein - basis)) * 1000) / 1000;
+  }
+  // Listen mit IDs (Rohstoffe, Rezepte, Kunden, Backtage, Bestellungen …): Eintrag für Eintrag
+  if (hatIds(mein) && hatIds(dein)) {
+    const b = new Map((hatIds(basis) ? basis : []).map((x) => [x.id, x]));
+    const m = new Map(mein.map((x) => [x.id, x]));
+    const d = new Map(dein.map((x) => [x.id, x]));
+    const ergebnis = [];
+    dein.forEach((t) => {
+      const bb = b.get(t.id);
+      const mm = m.get(t.id);
+      if (!mm) {
+        if (bb && gleichJson(t, bb)) return; // hier gelöscht, dort unverändert -> weg
+        ergebnis.push(t); // dort neu oder dort geändert -> behalten
+        return;
+      }
+      ergebnis.push(bb ? abgleichen(bb, mm, t) : mm);
+    });
+    mein.forEach((mm) => {
+      if (d.has(mm.id)) return;
+      const bb = b.get(mm.id);
+      if (bb && gleichJson(mm, bb)) return; // dort gelöscht, hier unverändert -> weg
+      ergebnis.push(mm); // hier neu oder hier geändert -> behalten
+    });
+    return ergebnis;
+  }
+  // Objekte: Feld für Feld
+  const istObj = (v) => v && typeof v === "object" && !Array.isArray(v);
+  if (istObj(mein) && istObj(dein)) {
+    const bo = istObj(basis) ? basis : {};
+    const out = {};
+    new Set([...Object.keys(dein), ...Object.keys(mein)]).forEach((k) => {
+      if (!(k in mein) && k in bo) {
+        if (!gleichJson(dein[k], bo[k])) out[k] = dein[k]; // hier gelöscht, dort geändert -> behalten
+        return;
+      }
+      if (!(k in dein) && k in bo) {
+        if (!gleichJson(mein[k], bo[k])) out[k] = mein[k];
+        return;
+      }
+      const v = abgleichen(bo[k], mein[k], dein[k], k);
+      if (v !== undefined) out[k] = v;
+    });
+    return out;
+  }
+  return mein; // beide Geräte haben denselben Wert geändert -> dieses Gerät gewinnt
+}
+
+// Form der Lager-Daten im Speicher (ohne _stand) – Grundlage für den Vergleich
+const lagerNormalisieren = (rec) => ({
+  materials: rec?.materials || [],
+  recipes: rec?.recipes || [],
+  columnMap: rec?.columnMap || {},
+  orderHistory: rec?.orderHistory || [],
+});
+
+const fmtStand = (st) => {
+  if (!st || !st.zeit) return "";
+  const d = new Date(st.zeit);
+  const heute = new Date().toDateString() === d.toDateString();
+  const zeit = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const wer = st.geraet === GERAET.id ? "diesem Gerät" : st.art === "Handy" ? "dem Handy" : st.art === "PC" ? "dem Laptop/PC" : "einem anderen Gerät";
+  return `${heute ? "heute" : d.toLocaleDateString("de-DE")} ${zeit} von ${wer}`;
+};
+
 // ---------- Main App ----------
 function App() {
   useEffect(() => {
@@ -2128,6 +2223,16 @@ function App() {
   const [gruss] = useState(begruessung);
   const [spruch] = useState(() => BAECKER_SPRUECHE[Math.floor(Math.random() * BAECKER_SPRUECHE.length)]);
   const loadedRef = React.useRef(false);
+  // Abgleich: zuletzt geladener/gespeicherter Stand im Speicher und wann
+  const basisRef = React.useRef(null);
+  const basisZeitRef = React.useRef(0);
+  const skipSaveRef = React.useRef(false);
+  const dirtyRef = React.useRef(false);
+  const saveChainRef = React.useRef(Promise.resolve());
+  const [letzterStand, setLetzterStand] = useState(null);
+  const [abgleichInfo, setAbgleichInfo] = useState(null);
+  const [ladeFehler, setLadeFehler] = useState("");
+  const [ladeVersuch, setLadeVersuch] = useState(0);
 
   useEffect(() => {
     if (!config) {
@@ -2135,10 +2240,15 @@ function App() {
       return;
     }
     let cancelled = false;
+    setLoading(true);
+    setLadeFehler("");
     (async () => {
       try {
         const data = await readBin(config.apiKey, config.binId);
         if (!cancelled) {
+          basisRef.current = lagerNormalisieren(data);
+          basisZeitRef.current = Date.now();
+          setLetzterStand(data._stand || null);
           let mats = data.materials || [];
           let recs = data.recipes || [];
           let existingBackups = loadLocalBackups();
@@ -2166,6 +2276,9 @@ function App() {
           if (data.recipes) setRecipes(recs);
           if (data.columnMap) setColumnMap(data.columnMap);
           if (data.orderHistory) setOrderHistory(data.orderHistory);
+          // Nur speichern, wenn beim Laden wirklich etwas angepasst wurde (Import, Reparatur) – spart Zugriffe
+          const geladen = lagerNormalisieren({ ...data, materials: data.materials ? mats : undefined, recipes: data.recipes ? recs : undefined });
+          skipSaveRef.current = gleichJson(geladen, basisRef.current);
           setBackups(existingBackups);
 
           // Einmal täglich beim ersten Öffnen automatisch eine Sicherung anlegen (nur lokal, nicht in der Cloud)
@@ -2180,11 +2293,15 @@ function App() {
             }
           }
         }
-      } catch (e) {
-        if (!cancelled) setSyncState("error");
-      } finally {
         if (!cancelled) {
           loadedRef.current = true;
+          setLoading(false);
+        }
+      } catch (e) {
+        // Nicht mit Musterdaten weiterarbeiten – sonst würden die echten Daten beim nächsten Speichern überschrieben
+        if (!cancelled) {
+          loadedRef.current = false;
+          setLadeFehler(e?.message || "Speicher nicht erreichbar");
           setLoading(false);
         }
       }
@@ -2192,55 +2309,128 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [config]);
-
-  useEffect(() => {
-    if (!config || !loadedRef.current) return;
-    setSyncState("saving");
-    const t = setTimeout(async () => {
-      try {
-        await writeBin(config.apiKey, config.binId, { materials, recipes, columnMap, orderHistory });
-        setSyncState("saved");
-        setSyncErrorDetail("");
-      } catch (e) {
-        setSyncState("error");
-        setSyncErrorDetail(e?.message || "Unbekannter Fehler");
-      }
-    }, 800);
-    return () => clearTimeout(t);
-  }, [materials, recipes, columnMap, orderHistory]);
+  }, [config, ladeVersuch]);
 
   const latestRef = React.useRef({});
   useEffect(() => {
     latestRef.current = { materials, recipes, columnMap, orderHistory, backups, config };
   });
 
+  const uebernehmen = (d) => {
+    skipSaveRef.current = true;
+    setMaterials(d.materials);
+    setRecipes(d.recipes);
+    setColumnMap(d.columnMap);
+    setOrderHistory(d.orderHistory);
+  };
+  const aktuellerStand = () => {
+    const l = latestRef.current;
+    return { materials: l.materials, recipes: l.recipes, columnMap: l.columnMap || {}, orderHistory: l.orderHistory || [] };
+  };
+
+  // Speichern mit Abgleich: Ist der eigene Stand älter als 2 Minuten, zuerst nachsehen, ob ein anderes Gerät
+  // inzwischen gespeichert hat – dann beide Änderungen zusammenführen statt zu überschreiben.
+  const speichern = async (mein) => {
+    const config = latestRef.current.config;
+    let ziel = mein;
+    if (Date.now() - basisZeitRef.current > 2 * 60 * 1000) {
+      const cloud = await readBin(config.apiKey, config.binId);
+      const dein = lagerNormalisieren(cloud);
+      if (!gleichJson(dein, basisRef.current)) {
+        ziel = abgleichen(basisRef.current, mein, dein);
+        setAbgleichInfo(cloud._stand || { zeit: new Date().toISOString() });
+      }
+    }
+    const stand = neuerStand();
+    await writeBin(config.apiKey, config.binId, { ...ziel, _stand: stand });
+    basisRef.current = ziel;
+    basisZeitRef.current = Date.now();
+    setLetzterStand(stand);
+    if (!gleichJson(ziel, mein)) {
+      // Änderungen vom anderen Gerät übernehmen – inkl. allem, was hier während des Speicherns geändert wurde
+      const jetzt = aktuellerStand();
+      uebernehmen(gleichJson(jetzt, mein) ? ziel : abgleichen(mein, jetzt, ziel));
+    }
+    dirtyRef.current = !gleichJson(aktuellerStand(), ziel);
+  };
+
   useEffect(() => {
-    const makeBackupAndSave = () => {
-      if (!loadedRef.current) return; // Noch nicht fertig geladen -> niemals überschreiben
-      const { materials, recipes, columnMap, orderHistory, backups, config } = latestRef.current;
+    if (!config || !loadedRef.current) return;
+    if (skipSaveRef.current) {
+      skipSaveRef.current = false;
+      return;
+    }
+    dirtyRef.current = true;
+    setSyncState("saving");
+    const t = setTimeout(() => {
+      const mein = { materials, recipes, columnMap, orderHistory };
+      saveChainRef.current = saveChainRef.current
+        .then(() => speichern(mein))
+        .then(() => {
+          setSyncState("saved");
+          setSyncErrorDetail("");
+        })
+        .catch((e) => {
+          setSyncState("error");
+          setSyncErrorDetail(e?.message || "Unbekannter Fehler");
+        });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [materials, recipes, columnMap, orderHistory]);
+
+  // Neuesten Stand holen (beim Zurückkehren in die App oder per Knopf) – nur wenn hier nichts ungespeichert ist
+  const vomSpeicherHolen = async (zwingend = false) => {
+    const config = latestRef.current.config;
+    if (!config || !loadedRef.current || dirtyRef.current) return;
+    try {
+      const cloud = await readBin(config.apiKey, config.binId);
+      const dein = lagerNormalisieren(cloud);
+      setLetzterStand(cloud._stand || null);
+      if (!gleichJson(dein, basisRef.current) || zwingend) {
+        if (!gleichJson(dein, aktuellerStand())) uebernehmen(dein);
+        basisRef.current = dein;
+      }
+      basisZeitRef.current = Date.now();
+      setSyncState("saved");
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    let verstecktSeit = 0;
+    const lokaleSicherung = () => {
+      if (!loadedRef.current) return;
+      const { materials, recipes, columnMap, backups } = latestRef.current;
       const snapshot = { timestamp: new Date().toISOString(), materials, recipes, columnMap };
-      const newBackups = [snapshot, ...(backups || [])].slice(0, 5);
-      saveLocalBackups(newBackups);
-      if (!config) return;
+      saveLocalBackups([snapshot, ...(backups || [])].slice(0, 5));
+    };
+    // Nur wenn noch eine Änderung auf dem Weg ist: sofort abschicken (kein blindes Überschreiben mehr)
+    const ausstehendSpeichern = () => {
+      const { config } = latestRef.current;
+      if (!config || !loadedRef.current || !dirtyRef.current) return;
       try {
-        const body = JSON.stringify({ materials, recipes, columnMap, orderHistory });
+        const stand = neuerStand();
         fetch(`https://api.jsonbin.io/v3/b/${config.binId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "X-Master-Key": config.apiKey },
-          body,
+          body: JSON.stringify({ ...aktuellerStand(), _stand: stand }),
           keepalive: true,
         });
       } catch (e) {}
     };
     const onVisibilityChange = () => {
-      if (document.visibilityState === "hidden") makeBackupAndSave();
+      if (document.visibilityState === "hidden") {
+        verstecktSeit = Date.now();
+        lokaleSicherung();
+        ausstehendSpeichern();
+      } else if (verstecktSeit && Date.now() - verstecktSeit > 20 * 1000) {
+        vomSpeicherHolen();
+      }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("pagehide", makeBackupAndSave);
+    window.addEventListener("pagehide", ausstehendSpeichern);
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("pagehide", makeBackupAndSave);
+      window.removeEventListener("pagehide", ausstehendSpeichern);
     };
   }, []);
 
@@ -2263,13 +2453,9 @@ function App() {
   const resetToDefaults = async () => {
     if (!window.confirm("Wirklich alle Eingaben löschen und auf die ursprünglich importierten Daten zurücksetzen?")) return;
     const imp = applyRezeptImport(seedRecipes, migrateVorteige(seedMaterials).materials, {});
+    // wird wie jede andere Änderung automatisch gespeichert
     setMaterials(imp.materials);
     setRecipes(imp.recipes);
-    if (config) {
-      try {
-        await writeBin(config.apiKey, config.binId, { materials: imp.materials, recipes: imp.recipes });
-      } catch (e) {}
-    }
   };
 
   const resetStockToZero = () => {
@@ -2302,6 +2488,27 @@ function App() {
         <div style={{ fontSize: 56, animation: "rise 1.6s ease-in-out infinite" }}>🍞</div>
         <Brand small />
         <div className="text-sm">Der Ofen heizt vor … deine Daten kommen gleich.</div>
+      </div>
+    );
+  }
+
+  if (ladeFehler) {
+    return (
+      <div
+        className="min-h-screen w-full flex flex-col items-center justify-center gap-4 px-6 text-center"
+        style={{ backgroundColor: COL.bg, fontFamily: "'IBM Plex Sans', sans-serif", color: COL.ink }}
+      >
+        <Brand small />
+        <div className="text-4xl">📡</div>
+        <div className="font-semibold">Deine Daten konnten nicht geladen werden.</div>
+        <div className="text-sm max-w-sm" style={{ color: COL.inkMuted }}>
+          Bitte Internetverbindung prüfen. Damit nichts überschrieben wird, arbeitet die App erst weiter, wenn deine Daten da sind.
+          <br />
+          <span className="text-xs">({ladeFehler})</span>
+        </div>
+        <button onClick={() => setLadeVersuch((v) => v + 1)} className="text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+          Nochmal versuchen
+        </button>
       </div>
     );
   }
@@ -2360,9 +2567,26 @@ function App() {
                 <>
                   <div className="fixed inset-0 z-[5]" onClick={() => setShowSettingsMenu(false)} />
                   <div
-                    className="absolute right-0 top-full mt-2 w-64 rounded-xl overflow-hidden z-10"
+                    className="absolute right-0 top-full mt-2 w-72 rounded-xl overflow-hidden z-10"
                     style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}`, boxShadow: "0 8px 24px rgba(38,32,25,0.12)" }}
                   >
+                  <div className="px-4 py-3 text-xs" style={{ backgroundColor: COL.bg, color: COL.inkMuted, borderBottom: `1px solid ${COL.line}` }}>
+                    <div>
+                      Speicher-Nr. <b style={{ color: COL.ink, fontFamily: "'IBM Plex Mono', monospace" }}>…{String(config.binId).slice(-6)}</b> · dieses Gerät: {GERAET.art}
+                    </div>
+                    {letzterStand && <div className="mt-0.5">Zuletzt gespeichert: {fmtStand(letzterStand)}</div>}
+                    <div className="mt-1" style={{ fontSize: 11 }}>Auf Handy und Laptop muss dieselbe Nummer stehen.</div>
+                    <button
+                      onClick={() => {
+                        vomSpeicherHolen(true);
+                        setShowSettingsMenu(false);
+                      }}
+                      className="mt-2 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                      style={{ backgroundColor: COL.accent, color: "#fff" }}
+                    >
+                      🔄 Jetzt abgleichen
+                    </button>
+                  </div>
                   <button
                     onClick={() => {
                       setShowQR(true);
@@ -2606,6 +2830,18 @@ function App() {
           <div className="flex items-center justify-between gap-2 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
             <span>✅ Backzettel vom Lager abgebucht.</span>
             <button onClick={() => setEingangOk(false)} aria-label="Schließen"><X size={16} /></button>
+          </div>
+        )}
+
+        {abgleichInfo && (
+          <div className="flex items-start gap-3 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.amberSoft, color: COL.amber, animation: "fadeIn .3s ease" }}>
+            <span className="text-xl">🔄</span>
+            <div className="flex-1">
+              Inzwischen wurde auf einem anderen Gerät gespeichert ({fmtStand(abgleichInfo)}). <b>Beide Änderungen wurden zusammengeführt</b> – beim Lagerbestand werden Abbuchungen von beiden Geräten zusammengerechnet.
+            </div>
+            <button onClick={() => setAbgleichInfo(null)} aria-label="Schließen">
+              <X size={16} />
+            </button>
           </div>
         )}
 
