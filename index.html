@@ -1133,7 +1133,7 @@ const seedRecipes = [
 // damit Zuordnungen im Bestellung-Tab erhalten bleiben.
 // Import in Schritten: jeder Schritt läuft genau einmal und übernimmt nur die Rezepte mit passendem "seit"
 // (ohne "seit" = erster Schritt). So werden in der App geänderte Rezepte später nicht überschrieben.
-const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10", "app-2026-10-weckerl"];
+const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10", "app-2026-10-weckerl", "app-2026-10-apfelschnecke"];
 
 // Excel-Zutatenname -> mögliche Rohstoff-Namen in der App (erster Treffer gewinnt, sonst wird der erste neu angelegt)
 const ZUTAT_ALIAS = {
@@ -1279,6 +1279,13 @@ const EXCEL_REZEPTE = [
     teiggewicht: "80 g Fülle pro Mohnkipferl (80 g Brioche)",
     anleitung: "Milch aufkochen lassen und über alle Zutaten leeren.\nBestreuung: 6 g Mohn G. pro Kipferl.",
     gruppen: [{ z: [["Mohn G.", 308], ["Milch", 189], ["MarillenM.", 77], ["Powidell", 154], ["Zucker", 61], ["Zimt", 3], ["Rum", 10]] }] },
+  // Apfelschnecke neu (Angaben von Börni, 06.10.2026): 150 g Brioche + Apfelfülle + Butter-Crumble obendrauf
+  { name: "Apfelfülle", kategorie: "Füllungen", stueck: 1, seit: "app-2026-10-apfelschnecke",
+    teiggewicht: "ca. 71 g pro Apfelschnecke (150 g Brioche)",
+    gruppen: [{ z: [["Äpfel", 66], ["Vanillezucker", 5], ["Zimt", 0.4]] }] },
+  { name: "Butter-Crumble", kategorie: "Füllungen", stueck: 1, seit: "app-2026-10-apfelschnecke",
+    teiggewicht: "35 g Topping pro Apfelschnecke",
+    gruppen: [{ z: [["Butter", 10], ["Dinkelmehl", 10], ["Staubzucker", 15]] }] },
   { name: "Apfelfülle Zimtschnecken", kategorie: "Füllungen", stueck: 1, seit: "excel-2026-10",
     teiggewicht: "56,9 g Fülle + 2,75 g Zimtzucker pro Apfelschnecke (125 g Brioche)",
     gruppen: [
