@@ -624,17 +624,58 @@ const LAGERLISTE_2024 = [
   ["Powidell", 5.458, [], "Powidl"],
 ];
 
-// Übernimmt Preise und Allergene aus der Lagerartikelliste – einmal pro Rohstoff (Merker "lagerliste2024").
+// ---------- Preise & Allergene, von Börni einzeln angehakt (07.10.2026) ----------
+// Quelle: METRO Wr. Neustadt (Nettopreis) oder Lagerartikelliste 2024 – je nachdem, was angehakt wurde.
+// Gleiches Format wie LAGERLISTE_2024: [Rohstoff in der App, Nettopreis €/kg, Allergene, Quelle]
+const PREISE_2026_10 = [
+  ["Trockengerm", 9.38, [], "METRO: Haas Germ 500 g"],
+  ["Trockenhefe", 9.38, [], "METRO: Haas Germ 500 g"],
+  ["Käse", 4.42, ["milch"], "Lagerliste: Käse gerieben"],
+  ["Wallnüsse", 11.99, ["schalenfruechte"], "METRO: aro Walnusskerne 1 kg"],
+  ["Walnüsse", 11.99, ["schalenfruechte"], "METRO: aro Walnusskerne 1 kg"],
+  ["Walnüsse gereiben", 11.99, ["schalenfruechte"], "METRO: aro Walnusskerne 1 kg"],
+  ["Haselmüsse", 11.09, ["schalenfruechte"], "METRO: Haselnüsse gehackt 1 kg"],
+  ["Haselnüsse", 11.09, ["schalenfruechte"], "METRO: Haselnüsse gehackt 1 kg"],
+  ["Kürbiskerne gehackt", 10.49, [], "METRO: aro Kürbiskerne 1 kg"],
+  ["Kuvertüre D.", 15.41, ["soja"], "Lagerliste: Callebaut dunkel"],
+  ["Dunkle K.", 15.41, ["soja"], "Lagerliste: Callebaut dunkel"],
+  ["Kuvertüre M.", 15.19, ["milch", "soja"], "Lagerliste: Callebaut Milch"],
+  ["Kuvertüre W.", 15.45, ["milch", "soja"], "Lagerliste: Callebaut weiß"],
+  ["Schoko Trops", 5.87, ["soja"], "Lagerliste: Schokodrops backstabil"],
+  ["Äpfel", 1.67, [], "Lagerliste: Apfel"],
+  ["Apfel", 1.67, [], "Lagerliste: Apfel"],
+  ["Birne", 2.69, [], "METRO: Birnen Williams 4,5 kg"],
+  ["MarillenM.", 2.96, [], "METRO: Uwe Marillenkonfitüre Bäcker Spezial 13,5 kg"],
+  ["Ribiselmarmelade", 3.39, [], "Lagerliste: Ribiselkonfitüre"],
+  ["Pflaumen", 9.99, [], "Lagerliste: Pflaumen gedörrt"],
+  ["Kartoffeln G. und K.", 4.79, [], "Lagerliste: Kartoffeln vorgekocht"],
+  ["Maizena", 2.8, [], "METRO: Agrana Maisstärke 5 kg"],
+  ["Vanillepuding", 3.99, [], "METRO: aro Vanille-Puddingpulver 1 kg"],
+  ["Blatt Gelatine", 34.99, [], "Lagerliste: Blattgelatine"],
+  ["Gelantine", 34.99, [], "Lagerliste: Blattgelatine"],
+  ["Galantine", 34.99, [], "Lagerliste: Blattgelatine"],
+  ["B. Zucker", 2.29, [], "METRO: Rohrzucker Demerara 1 kg"],
+  ["Hagelsalz", 2.9, [], "METRO: Bad Ischler Bäckersalz grob 2 kg"],
+  ["Knoblauch", 8.99, [], "METRO: Knoblauchzehen geschält 1 kg"],
+  ["Muskatnuss", 39.98, [], "METRO: Muskatnuss gemahlen 500 g"],
+  ["Nelkenpulver", 56.55, [], "METRO: Wiberg Nelken gemahlen"],
+  ["Zimtstangen", 22.79, [], "METRO: Kotányi Zimt ganz 1 kg"],
+  ["Vanilleschote", 400, [], "METRO: Wiberg Bourbon, 10 Stk = 75 g, 3 €/Stk"],
+  ["Zitrone", 3.49, [], "METRO: Zitronen unbehandelt 2,5 kg"],
+  ["Oliven ÖL", 17.29, [], "Lagerliste: Olivenöl Carapelli"],
+];
+
+// Übernimmt Preise und Allergene aus einer Preisliste – einmal pro Rohstoff und Liste (Merker z. B. "lagerliste2024").
 // Ein schon eingetragener Preis wird NICHT überschrieben (nur gemeldet), Allergene werden nur ergänzt, nie entfernt.
-function lagerlisteUebernehmen(materials) {
+function lagerlisteUebernehmen(materials, liste = LAGERLISTE_2024, merker = "lagerliste2024") {
   const norm = (s) => (s || "").trim().toLowerCase();
   const info = { preise: [], allergene: [], behalten: [] };
   const mats = materials.map((m) => {
-    if (m.lagerliste2024 || m.vorteig) return m;
-    const e = LAGERLISTE_2024.find(([name]) => norm(name) === norm(m.name));
+    if (m[merker] || m.vorteig) return m;
+    const e = liste.find(([name]) => norm(name) === norm(m.name));
     if (!e) return m;
     const [, preisKg, allergene, listenName] = e;
-    const neu = { ...m, lagerliste2024: true };
+    const neu = { ...m, [merker]: true };
     // Preis in der Einheit des Rohstoffs (die App rechnet pro g bzw. ml)
     const proEinheit = ["g", "ml"].includes(m.unit) ? preisKg / 1000 : ["kg", "l"].includes(m.unit) ? preisKg : null;
     if (proEinheit != null && preisKg > 0) {
@@ -2380,8 +2421,14 @@ function App() {
             recs = rep.recipes;
             if (rep.repariert.length || rep.offen.length) setVerweisInfo(rep);
             const ll = lagerlisteUebernehmen(mats);
-            mats = ll.materials;
-            if (ll.info.preise.length || ll.info.allergene.length || ll.info.behalten.length) setLagerlisteInfo(ll.info);
+            const pr = lagerlisteUebernehmen(ll.materials, PREISE_2026_10, "preise202610");
+            mats = pr.materials;
+            const preisInfo = {
+              preise: [...ll.info.preise, ...pr.info.preise],
+              allergene: [...ll.info.allergene, ...pr.info.allergene],
+              behalten: [...ll.info.behalten, ...pr.info.behalten],
+            };
+            if (preisInfo.preise.length || preisInfo.allergene.length || preisInfo.behalten.length) setLagerlisteInfo(preisInfo);
           }
           if (data.materials) setMaterials(mats);
           if (data.recipes) setRecipes(recs);
@@ -2960,7 +3007,7 @@ function App() {
           <div className="flex items-start gap-3 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok, animation: "fadeIn .3s ease" }}>
             <span className="text-xl">📋</span>
             <div className="flex-1 flex flex-col gap-1">
-              <div className="font-semibold">Aus der Lagerartikelliste 2024 übernommen (Nettopreise)</div>
+              <div className="font-semibold">Preise & Allergene übernommen (Nettopreise)</div>
               {lagerlisteInfo.preise.length > 0 && (
                 <div><b>Preise ({lagerlisteInfo.preise.length}):</b> {lagerlisteInfo.preise.join(", ")}</div>
               )}
