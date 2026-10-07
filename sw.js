@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lager-rezeptur-v11';
+const CACHE_NAME = 'lager-rezeptur-v12';
 
 const APP_SHELL = [
   './',

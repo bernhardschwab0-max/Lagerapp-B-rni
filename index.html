@@ -575,6 +575,86 @@ function migrateVorteige(materials) {
   return { materials: updated, changed };
 }
 
+// ---------- Preise & Allergene aus "Lagerartikelliste 2024.xlsm" (Meisterschule) ----------
+// Nur eindeutige Zuordnungen: gleicher Name wie in der Lager-App oder von Börni bestätigt (07.10.2026).
+// [Rohstoff in der App, Nettopreis €/kg, Allergene (aus den GROSS geschriebenen Zutaten der Kennzeichnung), Name in der Liste]
+const LAGERLISTE_2024 = [
+  ["Apfelsaft", 1.2, [], "Apfelsaft"],
+  ["Backpulver", 3.95, ["gluten"], "Backpulver"],
+  ["Butter", 10.99, ["milch"], "Butter"],
+  ["Dinkelflocken", 1.5, ["gluten"], "Dinkelflocken"],
+  ["Dinkelmehl", 1.95, ["gluten"], "Dinkelmehl"],
+  ["Dotter", 13.63, ["eier"], "Dotter"],
+  ["Eier", 5.45, ["eier"], "Eier"],
+  ["Eiweiß", 3.33, ["eier"], "Eiweiß"],
+  ["Hefe", 3.94, [], "Hefe"],
+  ["Honig", 7.71, [], "Honig"],
+  ["Kletzen", 15.65, [], "Kletzen"],
+  ["Kürbiskernöl", 21.99, [], "Kürbiskernöl"],
+  ["Leinsamen", 1.75, [], "Leinsamen"],
+  ["Malz", 4.75, ["gluten"], "Malz"],
+  ["Mohn", 4.81, [], "Mohn"],
+  ["Öl", 8.79, [], "Öl"],
+  ["Orangeat", 2.9, [], "Orangeat"],
+  ["Oregano", 5.9, [], "Oregano"],
+  ["Roggenmehl 960", 0.77, ["gluten"], "Roggenmehl 960"],
+  ["Rosinen", 3.55, [], "Rosinen"],
+  ["Rum", 7.88, [], "Rum"],
+  ["Salz", 0.44, [], "Salz"],
+  ["Sauerrahm", 4.59, ["milch"], "Sauerrahm"],
+  ["Schinken", 13.94, [], "Schinken"],
+  ["Staubzucker", 1.7, [], "Staubzucker"],
+  ["Sultaninen", 3.5, [], "Sultaninen"],
+  ["Topfen", 5.16, ["milch"], "Topfen"],
+  ["Vanillearoma", 8.2, [], "Vanillearoma"],
+  ["Vanillezucker", 4, [], "Vanillezucker"],
+  ["Vollei", 5.45, ["eier"], "Vollei"],
+  ["Zimt", 5.3, [], "Zimt"],
+  ["Zitronat", 3.45, [], "Zitronat"],
+  ["Zitronenaroma", 6.18, [], "Zitronenaroma"],
+  ["Roggen 960", 0.77, ["gluten"], "Roggenmehl 960"],
+  ["Roggenmalz", 4.4804, ["gluten"], "Roggenmalzpulver"],
+  ["Sonnenblumen K.", 2.85, [], "Sonnenblumenkerne"],
+  ["Milch", 1.55, ["milch"], "Vollmilch"],
+  ["Obers", 6.39, ["milch"], "Schlagobers"],
+  ["Eigelb", 13.63, ["eier"], "Dotter"],
+  ["Zucker", 0.97, [], "Feinkristallzucker"],
+  ["Kristallzucker", 0.97, [], "Feinkristallzucker"],
+  ["Mohn G.", 6, [], "Mohn gemahlen"],
+  ["Powidell", 5.458, [], "Powidl"],
+];
+
+// Übernimmt Preise und Allergene aus der Lagerartikelliste – einmal pro Rohstoff (Merker "lagerliste2024").
+// Ein schon eingetragener Preis wird NICHT überschrieben (nur gemeldet), Allergene werden nur ergänzt, nie entfernt.
+function lagerlisteUebernehmen(materials) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const info = { preise: [], allergene: [], behalten: [] };
+  const mats = materials.map((m) => {
+    if (m.lagerliste2024 || m.vorteig) return m;
+    const e = LAGERLISTE_2024.find(([name]) => norm(name) === norm(m.name));
+    if (!e) return m;
+    const [, preisKg, allergene, listenName] = e;
+    const neu = { ...m, lagerliste2024: true };
+    // Preis in der Einheit des Rohstoffs (die App rechnet pro g bzw. ml)
+    const proEinheit = ["g", "ml"].includes(m.unit) ? preisKg / 1000 : ["kg", "l"].includes(m.unit) ? preisKg : null;
+    if (proEinheit != null && preisKg > 0) {
+      if (!(Number(m.price) > 0)) {
+        neu.price = Math.round(proEinheit * 1e6) / 1e6;
+        info.preise.push(`${m.name} ${fmtEUR(preisKg)}/kg${listenName !== m.name ? ` (${listenName})` : ""}`);
+      } else if (Math.abs(Number(m.price) - proEinheit) > 1e-6) {
+        info.behalten.push(m.name);
+      }
+    }
+    const fehlend = allergene.filter((a) => !(m.allergene || []).includes(a));
+    if (fehlend.length) {
+      neu.allergene = [...(m.allergene || []), ...fehlend];
+      info.allergene.push(`${m.name} (${fehlend.map(allergenLabel).join(", ")})`);
+    }
+    return neu;
+  });
+  return { materials: mats, info, changed: mats.some((m, i) => m !== materials[i]) };
+}
+
 // Repariert Verweise auf gelöschte Rohstoffe (z.B. nach dem Löschen eines doppelten "Roggen 960"):
 // - Vorstufen (Sauerteig, Kochstück …) werden aus VORSTUFEN_DEFS neu zusammengesetzt
 // - Excel-Rezepte bekommen die passende Zutat wieder (Position im Rezept + ZUTAT_ALIAS)
@@ -2245,6 +2325,7 @@ function App() {
   const [syncErrorDetail, setSyncErrorDetail] = useState("");
   const [importInfo, setImportInfo] = useState(null);
   const [verweisInfo, setVerweisInfo] = useState(null);
+  const [lagerlisteInfo, setLagerlisteInfo] = useState(null);
   const [eingang, setEingang] = useState(() => leseBackzettelAusLink());
   const [eingangOk, setEingangOk] = useState(false);
   const [gruss] = useState(begruessung);
@@ -2298,6 +2379,9 @@ function App() {
             mats = rep.materials;
             recs = rep.recipes;
             if (rep.repariert.length || rep.offen.length) setVerweisInfo(rep);
+            const ll = lagerlisteUebernehmen(mats);
+            mats = ll.materials;
+            if (ll.info.preise.length || ll.info.allergene.length || ll.info.behalten.length) setLagerlisteInfo(ll.info);
           }
           if (data.materials) setMaterials(mats);
           if (data.recipes) setRecipes(recs);
@@ -2867,6 +2951,27 @@ function App() {
               Inzwischen wurde auf einem anderen Gerät gespeichert ({fmtStand(abgleichInfo)}). <b>Beide Änderungen wurden zusammengeführt</b> – beim Lagerbestand werden Abbuchungen von beiden Geräten zusammengerechnet.
             </div>
             <button onClick={() => setAbgleichInfo(null)} aria-label="Schließen">
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
+        {lagerlisteInfo && (
+          <div className="flex items-start gap-3 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok, animation: "fadeIn .3s ease" }}>
+            <span className="text-xl">📋</span>
+            <div className="flex-1 flex flex-col gap-1">
+              <div className="font-semibold">Aus der Lagerartikelliste 2024 übernommen (Nettopreise)</div>
+              {lagerlisteInfo.preise.length > 0 && (
+                <div><b>Preise ({lagerlisteInfo.preise.length}):</b> {lagerlisteInfo.preise.join(", ")}</div>
+              )}
+              {lagerlisteInfo.allergene.length > 0 && (
+                <div><b>Allergene ergänzt:</b> {lagerlisteInfo.allergene.join(", ")}</div>
+              )}
+              {lagerlisteInfo.behalten.length > 0 && (
+                <div style={{ color: COL.amber }}><b>Nicht überschrieben</b> (hatte schon einen anderen Preis): {lagerlisteInfo.behalten.join(", ")}</div>
+              )}
+            </div>
+            <button onClick={() => setLagerlisteInfo(null)} aria-label="Schließen">
               <X size={16} />
             </button>
           </div>
@@ -3613,7 +3718,7 @@ function RohstoffeTab({ materials, setMaterials, recipes = [], setRecipes }) {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 px-2">{fmtEUR(m.price)}</td>
+                      <td className="py-2 px-2" style={{ whiteSpace: "nowrap" }}>{["g", "ml"].includes(m.unit) ? `${fmtEUR((m.price || 0) * 1000)}/${m.unit === "g" ? "kg" : "l"}` : `${fmtEUR(m.price)}/${m.unit}`}</td>
                       <td className="py-2 px-2">{m.unit}</td>
                       <td
                         className="py-2 px-2"
