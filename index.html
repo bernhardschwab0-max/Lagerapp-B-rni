@@ -694,8 +694,13 @@ const KORREKTUR_2026_10B = [
 
 const KORREKTUR_2026_10C = [
   ["Dinkelmalz", 4.71, ["gluten"], "Börni"],
-  ["Roggen 2500", 0.98, ["gluten"], "Börni"],
+  ["Roggen 2500", 1.75, ["gluten"], "Börni"],
   ["Roggenschrot", 0.98, ["gluten"], "Börni"],
+];
+
+// Roggen 2500 kostet 1,75 (nicht 0,98) – korrigiert Geräte, die Schritt C schon mit 0,98 übernommen haben.
+const KORREKTUR_2026_10D = [
+  ["Roggen 2500", 1.75, ["gluten"], "Börni"],
 ];
 
 // Reihenfolge der Preislisten: [Liste, Merker, vorhandenen Preis ersetzen?]
@@ -705,6 +710,7 @@ const PREIS_SCHRITTE = [
   [KORREKTUR_2026_10, "korrektur202610", true],
   [KORREKTUR_2026_10B, "korrektur202610b", true],
   [KORREKTUR_2026_10C, "korrektur202610c", true],
+  [KORREKTUR_2026_10D, "korrektur202610d", true],
 ];
 
 // ---------- Rohstoffe zusammenlegen (Börni, 09.10.2026) ----------
