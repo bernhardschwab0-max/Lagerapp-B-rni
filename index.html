@@ -681,6 +681,25 @@ const KORREKTUR_2026_10 = [
   ["Süsse Brösel", 0, ["gluten"], ""],
 ];
 
+// Weitere Preise von Börni (09.10.2026) – ersetzen den bisherigen Preis.
+// "Vollkornmehl" ist in den Rezepten das Roggenvollkornmehl (siehe ZUTAT_ALIAS "Roggenvollkorn").
+const KORREKTUR_2026_10B = [
+  ["Roggen 960", 0.65, ["gluten"], "Börni"],
+  ["Roggenmehl 960", 0.65, ["gluten"], "Börni"],
+  ["Dinkelvollmehl", 1.9, ["gluten"], "Börni: Dinkelvollkorn"],
+  ["Dinkelflocken", 4.24, ["gluten"], "Börni: 3,18 € je 750 g"],
+  ["Roggenvollkorn", 0.79, ["gluten"], "Börni"],
+  ["Vollkornmehl", 0.79, ["gluten"], "Börni: Roggenvollkorn"],
+];
+
+// Reihenfolge der Preislisten: [Liste, Merker, vorhandenen Preis ersetzen?]
+const PREIS_SCHRITTE = [
+  [LAGERLISTE_2024, "lagerliste2024", false],
+  [PREISE_2026_10, "preise202610", false],
+  [KORREKTUR_2026_10, "korrektur202610", true],
+  [KORREKTUR_2026_10B, "korrektur202610b", true],
+];
+
 // Übernimmt Preise und Allergene aus einer Preisliste – einmal pro Rohstoff und Liste (Merker z. B. "lagerliste2024").
 // Ein schon eingetragener Preis wird NICHT überschrieben (nur gemeldet), außer bei ueberschreiben = true.
 // Allergene werden nur ergänzt, nie entfernt.
@@ -2437,15 +2456,15 @@ function App() {
             mats = rep.materials;
             recs = rep.recipes;
             if (rep.repariert.length || rep.offen.length) setVerweisInfo(rep);
-            const ll = lagerlisteUebernehmen(mats);
-            const pr = lagerlisteUebernehmen(ll.materials, PREISE_2026_10, "preise202610");
-            const kor = lagerlisteUebernehmen(pr.materials, KORREKTUR_2026_10, "korrektur202610", true);
-            mats = kor.materials;
-            const preisInfo = {
-              preise: [...ll.info.preise, ...pr.info.preise, ...kor.info.preise],
-              allergene: [...ll.info.allergene, ...pr.info.allergene, ...kor.info.allergene],
-              behalten: [...ll.info.behalten, ...pr.info.behalten].filter((n) => !kor.info.preise.some((p) => p.startsWith(n + " "))),
-            };
+            const preisInfo = { preise: [], allergene: [], behalten: [] };
+            for (const [liste, merker, ueberschreiben] of PREIS_SCHRITTE) {
+              const r = lagerlisteUebernehmen(mats, liste, merker, ueberschreiben);
+              mats = r.materials;
+              preisInfo.preise.push(...r.info.preise);
+              preisInfo.allergene.push(...r.info.allergene);
+              if (ueberschreiben) preisInfo.behalten = preisInfo.behalten.filter((n) => !r.info.preise.some((p) => p.startsWith(n + " ")));
+              else preisInfo.behalten.push(...r.info.behalten);
+            }
             if (preisInfo.preise.length || preisInfo.allergene.length || preisInfo.behalten.length) setLagerlisteInfo(preisInfo);
           }
           if (data.materials) setMaterials(mats);
