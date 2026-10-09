@@ -665,9 +665,26 @@ const PREISE_2026_10 = [
   ["Oliven ÖL", 17.29, [], "Lagerliste: Olivenöl Carapelli"],
 ];
 
+// ---------- Korrekturen von Börni (09.10.2026) – dieser Preis ERSETZT den bisherigen ----------
+// Preis 0 = nur Allergen ergänzen (Mehle ohne Preis bekommen Gluten).
+const KORREKTUR_2026_10 = [
+  ["Dinkelmehl", 0.95, ["gluten"], "Börni"],
+  ["Mehl", 0, ["gluten"], ""],
+  ["Vollkornmehl", 0, ["gluten"], ""],
+  ["Dinkelvollmehl", 0, ["gluten"], ""],
+  ["Roggen 2500", 0, ["gluten"], ""],
+  ["Roggenvollkorn", 0, ["gluten"], ""],
+  ["Roggenschrot", 0, ["gluten"], ""],
+  ["Backmalz", 0, ["gluten"], ""],
+  ["Dinkelmalz", 0, ["gluten"], ""],
+  ["Dinkelbrösel", 0, ["gluten"], ""],
+  ["Süsse Brösel", 0, ["gluten"], ""],
+];
+
 // Übernimmt Preise und Allergene aus einer Preisliste – einmal pro Rohstoff und Liste (Merker z. B. "lagerliste2024").
-// Ein schon eingetragener Preis wird NICHT überschrieben (nur gemeldet), Allergene werden nur ergänzt, nie entfernt.
-function lagerlisteUebernehmen(materials, liste = LAGERLISTE_2024, merker = "lagerliste2024") {
+// Ein schon eingetragener Preis wird NICHT überschrieben (nur gemeldet), außer bei ueberschreiben = true.
+// Allergene werden nur ergänzt, nie entfernt.
+function lagerlisteUebernehmen(materials, liste = LAGERLISTE_2024, merker = "lagerliste2024", ueberschreiben = false) {
   const norm = (s) => (s || "").trim().toLowerCase();
   const info = { preise: [], allergene: [], behalten: [] };
   const mats = materials.map((m) => {
@@ -679,9 +696,9 @@ function lagerlisteUebernehmen(materials, liste = LAGERLISTE_2024, merker = "lag
     // Preis in der Einheit des Rohstoffs (die App rechnet pro g bzw. ml)
     const proEinheit = ["g", "ml"].includes(m.unit) ? preisKg / 1000 : ["kg", "l"].includes(m.unit) ? preisKg : null;
     if (proEinheit != null && preisKg > 0) {
-      if (!(Number(m.price) > 0)) {
+      if (!(Number(m.price) > 0) || (ueberschreiben && Math.abs(Number(m.price) - proEinheit) > 1e-6)) {
         neu.price = Math.round(proEinheit * 1e6) / 1e6;
-        info.preise.push(`${m.name} ${fmtEUR(preisKg)}/kg${listenName !== m.name ? ` (${listenName})` : ""}`);
+        info.preise.push(`${m.name} ${fmtEUR(preisKg)}/kg${listenName && listenName !== m.name ? ` (${listenName})` : ""}`);
       } else if (Math.abs(Number(m.price) - proEinheit) > 1e-6) {
         info.behalten.push(m.name);
       }
@@ -2422,11 +2439,12 @@ function App() {
             if (rep.repariert.length || rep.offen.length) setVerweisInfo(rep);
             const ll = lagerlisteUebernehmen(mats);
             const pr = lagerlisteUebernehmen(ll.materials, PREISE_2026_10, "preise202610");
-            mats = pr.materials;
+            const kor = lagerlisteUebernehmen(pr.materials, KORREKTUR_2026_10, "korrektur202610", true);
+            mats = kor.materials;
             const preisInfo = {
-              preise: [...ll.info.preise, ...pr.info.preise],
-              allergene: [...ll.info.allergene, ...pr.info.allergene],
-              behalten: [...ll.info.behalten, ...pr.info.behalten],
+              preise: [...ll.info.preise, ...pr.info.preise, ...kor.info.preise],
+              allergene: [...ll.info.allergene, ...pr.info.allergene, ...kor.info.allergene],
+              behalten: [...ll.info.behalten, ...pr.info.behalten].filter((n) => !kor.info.preise.some((p) => p.startsWith(n + " "))),
             };
             if (preisInfo.preise.length || preisInfo.allergene.length || preisInfo.behalten.length) setLagerlisteInfo(preisInfo);
           }
