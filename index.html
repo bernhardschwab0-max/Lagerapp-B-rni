@@ -692,13 +692,65 @@ const KORREKTUR_2026_10B = [
   ["Vollkornmehl", 0.79, ["gluten"], "Börni: Roggenvollkorn"],
 ];
 
+const KORREKTUR_2026_10C = [
+  ["Dinkelmalz", 4.71, ["gluten"], "Börni"],
+  ["Roggen 2500", 0.98, ["gluten"], "Börni"],
+  ["Roggenschrot", 0.98, ["gluten"], "Börni"],
+];
+
 // Reihenfolge der Preislisten: [Liste, Merker, vorhandenen Preis ersetzen?]
 const PREIS_SCHRITTE = [
   [LAGERLISTE_2024, "lagerliste2024", false],
   [PREISE_2026_10, "preise202610", false],
   [KORREKTUR_2026_10, "korrektur202610", true],
   [KORREKTUR_2026_10B, "korrektur202610b", true],
+  [KORREKTUR_2026_10C, "korrektur202610c", true],
 ];
+
+// ---------- Rohstoffe zusammenlegen (Börni, 09.10.2026) ----------
+// [alter Rohstoff, wird ersetzt durch, Bestand dazuzählen?]
+const ZUSAMMENLEGEN_2026_10 = [
+  ["Mehl", "Dinkelmehl", false], // Börni nimmt Dinkelmehl statt Weizenmehl glatt
+  ["Backmalz", "Dinkelmalz", true], // ist dasselbe
+];
+
+// Ersetzt einen Rohstoff in allen Rezepten und Vorstufen durch einen anderen und löscht ihn – einmalig
+// (Merker "zusammen202610" am Ziel-Rohstoff, damit ein später neu angelegter Rohstoff gleichen Namens bleibt).
+// Gibt es das Ziel noch nicht, wird der alte Rohstoff nur umbenannt.
+function rohstoffeZusammenlegen(materials, recipes, paare = ZUSAMMENLEGEN_2026_10, merker = "zusammen202610") {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  let mats = materials;
+  let recs = recipes;
+  const info = [];
+  for (const [vonName, nachName, bestandDazu] of paare) {
+    const von = mats.find((m) => norm(m.name) === norm(vonName) && !m.vorteig);
+    const nach = mats.find((m) => norm(m.name) === norm(nachName) && !m.vorteig);
+    if (!von || (nach?.[merker] || []).includes(vonName)) continue;
+    if (!nach) {
+      mats = mats.map((m) => (m.id === von.id ? { ...m, name: nachName, [merker]: [vonName] } : m));
+      info.push(`${vonName} → ${nachName} (umbenannt)`);
+      continue;
+    }
+    const anzahl = recs.filter((r) => r.items.some((i) => i.materialId === von.id)).length;
+    recs = recs.map((r) => (r.items.some((i) => i.materialId === von.id) ? { ...r, items: r.items.map((i) => (i.materialId === von.id ? { ...i, materialId: nach.id } : i)) } : r));
+    mats = mats
+      .filter((m) => m.id !== von.id)
+      .map((m) => {
+        let n = m;
+        if (m.vorteig?.teile?.some((t) => t.materialId === von.id)) {
+          n = { ...m, vorteig: { ...m.vorteig, teile: m.vorteig.teile.map((t) => (t.materialId === von.id ? { ...t, materialId: nach.id } : t)) } };
+        }
+        if (n.id === nach.id) {
+          n = { ...n, [merker]: [...(n[merker] || []), vonName] };
+          if (bestandDazu) n.stock = Math.round(((n.stock || 0) + (von.stock || 0)) * 1000) / 1000;
+        }
+        return n;
+      });
+    const restBestand = !bestandDazu && von.stock > 0 ? `, Bestand ${von.stock} ${von.unit} nicht übernommen` : "";
+    info.push(`${vonName} → ${nachName} (in ${anzahl} Rezept${anzahl === 1 ? "" : "en"}${restBestand})`);
+  }
+  return { materials: mats, recipes: recs, info };
+}
 
 // Übernimmt Preise und Allergene aus einer Preisliste – einmal pro Rohstoff und Liste (Merker z. B. "lagerliste2024").
 // Ein schon eingetragener Preis wird NICHT überschrieben (nur gemeldet), außer bei ueberschreiben = true.
@@ -1316,6 +1368,8 @@ const ZUTAT_ALIAS = {
   "Kürbiskern Öl": ["Kürbiskernöl", "Kürbiskern Öl"],
   "Kürbiskerne gehackt": ["Kürbiskerne gehackt", "Kürbiskerne"],
   "Äpfel": ["Äpfel", "Apfel"],
+  "Mehl": ["Dinkelmehl", "Mehl"],
+  "Backmalz": ["Dinkelmalz", "Backmalz"],
 };
 
 const EXCEL_REZEPTE = [
@@ -2456,7 +2510,10 @@ function App() {
             mats = rep.materials;
             recs = rep.recipes;
             if (rep.repariert.length || rep.offen.length) setVerweisInfo(rep);
-            const preisInfo = { preise: [], allergene: [], behalten: [] };
+            const zus = rohstoffeZusammenlegen(mats, recs);
+            mats = zus.materials;
+            recs = zus.recipes;
+            const preisInfo = { preise: [], allergene: [], behalten: [], zusammen: zus.info };
             for (const [liste, merker, ueberschreiben] of PREIS_SCHRITTE) {
               const r = lagerlisteUebernehmen(mats, liste, merker, ueberschreiben);
               mats = r.materials;
@@ -2465,7 +2522,7 @@ function App() {
               if (ueberschreiben) preisInfo.behalten = preisInfo.behalten.filter((n) => !r.info.preise.some((p) => p.startsWith(n + " ")));
               else preisInfo.behalten.push(...r.info.behalten);
             }
-            if (preisInfo.preise.length || preisInfo.allergene.length || preisInfo.behalten.length) setLagerlisteInfo(preisInfo);
+            if (preisInfo.preise.length || preisInfo.allergene.length || preisInfo.behalten.length || preisInfo.zusammen.length) setLagerlisteInfo(preisInfo);
           }
           if (data.materials) setMaterials(mats);
           if (data.recipes) setRecipes(recs);
@@ -3045,6 +3102,9 @@ function App() {
             <span className="text-xl">📋</span>
             <div className="flex-1 flex flex-col gap-1">
               <div className="font-semibold">Preise & Allergene übernommen (Nettopreise)</div>
+              {lagerlisteInfo.zusammen?.length > 0 && (
+                <div><b>Zusammengelegt:</b> {lagerlisteInfo.zusammen.join(", ")}</div>
+              )}
               {lagerlisteInfo.preise.length > 0 && (
                 <div><b>Preise ({lagerlisteInfo.preise.length}):</b> {lagerlisteInfo.preise.join(", ")}</div>
               )}
