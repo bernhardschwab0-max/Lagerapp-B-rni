@@ -708,10 +708,14 @@ const KORREKTUR_2026_10E = [
   ["Kakao", 30, [], "Börni"],
 ];
 
-// Börni (11.10.2026): Dinkelbrösel 7,50 €/kg, Vanille 614,50 €/kg – ersetzen den bisherigen Preis
+// Börni (11.10.2026): Dinkelbrösel 7,50 €/kg, Vanille 560 €/kg – ersetzen den bisherigen Preis
 const KORREKTUR_2026_10F = [
   ["Dinkelbrösel", 7.5, ["gluten"], "Börni"],
-  ["Vanille", 614.5, [], "Börni"],
+  ["Vanille", 560, [], "Börni"],
+];
+// Vanille kostet 560 (nicht 614,50) – korrigiert Geräte, die Schritt F schon mit 614,50 übernommen haben
+const KORREKTUR_2026_10G = [
+  ["Vanille", 560, [], "Börni"],
 ];
 
 // Schokochunks für die Cookies (10.10.2026) – nur wenn noch kein Preis da ist
@@ -731,6 +735,7 @@ const PREIS_SCHRITTE = [
   [PREISE_2026_10B, "preise202610b", false],
   [KORREKTUR_2026_10E, "korrektur202610e", true],
   [KORREKTUR_2026_10F, "korrektur202610f", true],
+  [KORREKTUR_2026_10G, "korrektur202610g", true],
 ];
 
 // ---------- Rohstoffe zusammenlegen (Börni, 09.10.2026) ----------
