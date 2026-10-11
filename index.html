@@ -708,6 +708,12 @@ const KORREKTUR_2026_10E = [
   ["Kakao", 30, [], "Börni"],
 ];
 
+// Börni (11.10.2026): Dinkelbrösel 7,50 €/kg, Vanille 614,50 €/kg – ersetzen den bisherigen Preis
+const KORREKTUR_2026_10F = [
+  ["Dinkelbrösel", 7.5, ["gluten"], "Börni"],
+  ["Vanille", 614.5, [], "Börni"],
+];
+
 // Schokochunks für die Cookies (10.10.2026) – nur wenn noch kein Preis da ist
 const PREISE_2026_10B = [
   ["Schokochunks dunkel", 5.87, ["soja"], "Lagerliste: Schokodrops backstabil"],
@@ -724,6 +730,7 @@ const PREIS_SCHRITTE = [
   [KORREKTUR_2026_10D, "korrektur202610d", true],
   [PREISE_2026_10B, "preise202610b", false],
   [KORREKTUR_2026_10E, "korrektur202610e", true],
+  [KORREKTUR_2026_10F, "korrektur202610f", true],
 ];
 
 // ---------- Rohstoffe zusammenlegen (Börni, 09.10.2026) ----------
@@ -1362,7 +1369,7 @@ const seedRecipes = [
 // damit Zuordnungen im Bestellung-Tab erhalten bleiben.
 // Import in Schritten: jeder Schritt läuft genau einmal und übernimmt nur die Rezepte mit passendem "seit"
 // (ohne "seit" = erster Schritt). So werden in der App geänderte Rezepte später nicht überschrieben.
-const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10", "app-2026-10-weckerl", "app-2026-10-apfelschnecke", "app-2026-10-cookies", "app-2026-10-strudel"];
+const IMPORT_SCHRITTE = ["excel-2026-09", "excel-2026-10", "app-2026-10-weckerl", "app-2026-10-apfelschnecke", "app-2026-10-cookies", "app-2026-10-strudel", "app-2026-10-strudel-b"];
 
 // Excel-Zutatenname -> mögliche Rohstoff-Namen in der App (erster Treffer gewinnt, sonst wird der erste neu angelegt)
 const ZUTAT_ALIAS = {
@@ -1612,14 +1619,13 @@ const EXCEL_REZEPTE = [
     anleitung: "Wie Cookies Hell, aber statt 400 g Dinkelmehl: 310 g Dinkelmehl + 90 g Kakao, und helle statt dunkle Schokochunks.",
     gruppen: [{ z: [["Dinkelmehl", 310], ["Kakao", 90], ["Butter", 250], ["Zucker", 170], ["B. Zucker", 50], ["Schokochunks hell", 230], ["Eier", 100], ["Salz", 2], ["Vanille", 5], ["Backpulver", 10]] }] },
 
-  // Börni (11.10.2026): Apfelstrudel – 1 Strudel pro Ansatz.
-  // Butterbrösel: 250 g im Verhältnis 160 g Brösel : 40 g Butter = 200 g Dinkelbrösel + 50 g Butter
-  { name: "Apfelstrudel", alias: ["Apfelstrudl"], seit: "app-2026-10-strudel", kategorie: "Kuchen", stueck: 1,
-    anleitung: "Butterbrösel: 250 g = 200 g Brösel + 50 g Butter (Verhältnis 160 : 40). 150 g Butter zum Bestreichen.",
+  // Börni (11.10.2026): Apfelstrudel – 1 Strudel pro Ansatz (Dinkelbutterbrösel 160 g Brösel + 40 g Butter, 3 g Vanille)
+  { name: "Apfelstrudel", alias: ["Apfelstrudl"], seit: "app-2026-10-strudel-b", kategorie: "Kuchen", stueck: 1,
+    anleitung: "Dinkelbutterbrösel: 160 g Dinkelbrösel + 40 g Butter. 150 g Butter zum Bestreichen.",
     gruppen: [
       { titel: "Strudelteig", z: [["Dinkelmehl", 265], ["Wasser", 165], ["Öl", 20], ["Salz", 2]] },
-      { titel: "Apfelfülle", z: [["Äpfel", 1000], ["Kristallzucker", 100], ["Zimt", 8], ["Vanille", 5]] },
-      { titel: "Butterbrösel", z: [["Dinkelbrösel", 200], ["Butter", 50]] },
+      { titel: "Apfelfülle", z: [["Äpfel", 1000], ["Kristallzucker", 100], ["Zimt", 8], ["Vanille", 3]] },
+      { titel: "Dinkelbutterbrösel", z: [["Dinkelbrösel", 160], ["Butter", 40]] },
       { titel: "Zum Bestreichen", z: [["Butter", 150]] },
     ] },
 
