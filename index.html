@@ -2630,18 +2630,16 @@ function App() {
     return { materials: l.materials, recipes: l.recipes, columnMap: l.columnMap || {}, orderHistory: l.orderHistory || [] };
   };
 
-  // Speichern mit Abgleich: Ist der eigene Stand älter als 2 Minuten, zuerst nachsehen, ob ein anderes Gerät
-  // inzwischen gespeichert hat – dann beide Änderungen zusammenführen statt zu überschreiben.
+  // Speichern mit Abgleich: vor JEDEM Speichern nachsehen, ob ein anderes Gerät inzwischen gespeichert hat –
+  // dann beide Änderungen zusammenführen statt zu überschreiben (kostet einen Lesezugriff pro Speichern).
   const speichern = async (mein) => {
     const config = latestRef.current.config;
     let ziel = mein;
-    if (Date.now() - basisZeitRef.current > 2 * 60 * 1000) {
-      const cloud = await readBin(config.apiKey, config.binId);
-      const dein = lagerNormalisieren(cloud);
-      if (!gleichJson(dein, basisRef.current)) {
-        ziel = abgleichen(basisRef.current, mein, dein);
-        setAbgleichInfo(cloud._stand || { zeit: new Date().toISOString() });
-      }
+    const cloud = await readBin(config.apiKey, config.binId);
+    const dein = lagerNormalisieren(cloud);
+    if (!gleichJson(dein, basisRef.current)) {
+      ziel = abgleichen(basisRef.current, mein, dein);
+      setAbgleichInfo(cloud._stand || { zeit: new Date().toISOString() });
     }
     const stand = neuerStand();
     await writeBin(config.apiKey, config.binId, { ...ziel, _stand: stand });
