@@ -3458,25 +3458,50 @@ function RezepteTab({ materials, recipes, setRecipes }) {
 // ---------- Kalkulation Tab ----------
 function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrderHistory }) {
   const [mode, setMode] = useState("rezept"); // rezept | direkt
-  const [recipeId, setRecipeId] = useState(recipes[0]?.id ?? "");
-  const [targetQty, setTargetQty] = useState("");
+  // Mehrere Rezepte gemeinsam rechnen (z.B. Kletzenbrot + Früchtemischung) – Rohstoffe werden zusammengezählt
+  const [rezeptZeilen, setRezeptZeilen] = useState([{ id: uid(), recipeId: recipes[0]?.id ?? "", menge: "" }]);
   const [applied, setApplied] = useState(false);
   const [direktRows, setDirektRows] = useState([{ id: uid(), materialId: materials[0]?.id ?? "", menge: "" }]);
 
-  const recipe = recipes.find((r) => r.id === recipeId);
-  const scale = recipe && Number(targetQty) > 0 && recipe.ausbringungMenge > 0 ? Number(targetQty) / recipe.ausbringungMenge : 0;
+  const addRezeptZeile = () => {
+    setRezeptZeilen([...rezeptZeilen, { id: uid(), recipeId: recipes[0]?.id ?? "", menge: "" }]);
+    setApplied(false);
+  };
+  const removeRezeptZeile = (id) => {
+    setRezeptZeilen(rezeptZeilen.filter((z) => z.id !== id));
+    setApplied(false);
+  };
+  const updateRezeptZeile = (id, patch) => {
+    setRezeptZeilen(rezeptZeilen.map((z) => (z.id === id ? { ...z, ...patch } : z)));
+    setApplied(false);
+  };
+
+  // Gewählte Rezepte mit Menge > 0, je mit eigenen Rohstoffkosten
+  const teile = useMemo(
+    () =>
+      rezeptZeilen
+        .map((z) => {
+          const recipe = recipes.find((r) => r.id === z.recipeId);
+          const scale = recipe && Number(z.menge) > 0 && recipe.ausbringungMenge > 0 ? Number(z.menge) / recipe.ausbringungMenge : 0;
+          if (!recipe || scale <= 0) return null;
+          const items = expandVorteige(recipe.items, materials).map((it) => ({ materialId: it.materialId, needed: it.menge * scale }));
+          const cost = items.reduce((s, it) => s + it.needed * (materials.find((m) => m.id === it.materialId)?.price || 0), 0);
+          return { id: z.id, recipe, menge: Number(z.menge), items, cost };
+        })
+        .filter(Boolean),
+    [rezeptZeilen, recipes, materials]
+  );
 
   const rows = useMemo(() => {
-    if (!recipe) return [];
-    const expandedItems = expandVorteige(recipe.items, materials);
-    return expandedItems.map((it) => {
-      const mat = materials.find((m) => m.id === it.materialId);
-      const needed = it.menge * scale;
+    const summe = new Map();
+    teile.forEach((t) => t.items.forEach((it) => summe.set(it.materialId, (summe.get(it.materialId) || 0) + it.needed)));
+    return [...summe.entries()].map(([materialId, needed]) => {
+      const mat = materials.find((m) => m.id === materialId);
       const cost = mat ? needed * mat.price : 0;
       const enough = mat ? mat.stock >= needed : false;
-      return { materialId: it.materialId, mat, needed, cost, enough };
+      return { materialId, mat, needed, cost, enough };
     });
-  }, [recipe, materials, scale]);
+  }, [teile, materials]);
 
   const totalCost = rows.reduce((s, r) => s + r.cost, 0);
   const anyMissing = rows.some((r) => !r.enough);
@@ -3513,7 +3538,7 @@ function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrd
         return r ? { ...m, stock: Math.round((m.stock - r.needed) * 1000) / 1000 } : m;
       })
     );
-    logHistory(`Gebacken: ${recipe.name} (${fmtNum(Number(targetQty))} ${recipe.ausbringungEinheit})`, rows);
+    logHistory(`Gebacken: ${teile.map((t) => `${t.recipe.name} (${fmtNum(t.menge)} ${t.recipe.ausbringungEinheit})`).join(" + ")}`, rows);
     setApplied(true);
   };
 
@@ -3562,40 +3587,48 @@ function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrd
         </div>
 
         {mode === "rezept" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
-            <Field label="Rezept">
-              <select
-                style={inputStyle}
-                value={recipeId}
-                onChange={(e) => {
-                  setRecipeId(e.target.value);
-                  setApplied(false);
-                }}
-              >
-                {groupByKategorie(recipes).map((g) => (
-                  <optgroup key={g.kategorie} label={g.kategorie}>
-                    {g.items.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm mb-1" style={{ color: COL.inkMuted }}>
+              Rezept und produzierte Menge wählen. Gehören mehrere Rezepte zusammen (z.B. Kletzenbrot + Früchtemischung), mit „Weiteres Rezept“ dazunehmen – die Rohstoffe werden zusammengerechnet.
+            </p>
+            {rezeptZeilen.map((z) => {
+              const r = recipes.find((x) => x.id === z.recipeId);
+              return (
+                <div key={z.id} className="flex flex-wrap items-center gap-2">
+                  <select style={{ ...inputStyle, flex: "1 1 200px", minWidth: 0 }} value={z.recipeId} onChange={(e) => updateRezeptZeile(z.id, { recipeId: e.target.value })} aria-label="Rezept">
+                    {groupByKategorie(recipes).map((g) => (
+                      <optgroup key={g.kategorie} label={g.kategorie}>
+                        {g.items.map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {x.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </optgroup>
-                ))}
-              </select>
-            </Field>
-            <Field label={`Produzierte Menge${recipe ? " (" + recipe.ausbringungEinheit + ")" : ""}`}>
-              <input
-                style={inputStyle}
-                type="number"
-                step="0.01"
-                value={targetQty}
-                onChange={(e) => {
-                  setTargetQty(e.target.value);
-                  setApplied(false);
-                }}
-                placeholder={recipe ? `z.B. ${recipe.ausbringungMenge}` : ""}
-              />
-            </Field>
+                  </select>
+                  <input
+                    style={{ ...inputStyle, width: 68, flex: "none" }}
+                    type="number"
+                    step="0.01"
+                    value={z.menge}
+                    onChange={(e) => updateRezeptZeile(z.id, { menge: e.target.value })}
+                    placeholder={r ? `z.B. ${r.ausbringungMenge}` : "Menge"}
+                    aria-label={`Produzierte Menge${r ? " (" + r.ausbringungEinheit + ")" : ""}`}
+                  />
+                  <span className="text-xs shrink-0" style={{ color: COL.inkMuted }}>
+                    {r?.ausbringungEinheit || ""}
+                  </span>
+                  {rezeptZeilen.length > 1 && (
+                    <button onClick={() => removeRezeptZeile(z.id)} style={{ color: COL.warn }} aria-label="Rezept entfernen">
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            <button onClick={addRezeptZeile} className="text-sm font-medium mt-1 flex items-center gap-1 w-fit" style={{ color: COL.accent }}>
+              <Plus size={14} /> Weiteres Rezept
+            </button>
           </div>
         )}
 
@@ -3646,7 +3679,7 @@ function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrd
         )}
       </Card>
 
-      {mode === "rezept" && recipe && scale > 0 && (
+      {mode === "rezept" && teile.length > 0 && (
         <Card>
           <div className="overflow-x-auto mb-4">
             <table className="w-full text-sm" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -3691,6 +3724,17 @@ function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrd
                 ))}
               </tbody>
               <tfoot>
+                {teile.length > 1 &&
+                  teile.map((t) => (
+                    <tr key={t.id}>
+                      <td colSpan={4} className="pt-2 px-2 text-right" style={{ fontFamily: "'IBM Plex Sans', sans-serif", color: COL.inkMuted }}>
+                        davon {t.recipe.name} ({fmtNum(t.menge)} {t.recipe.ausbringungEinheit})
+                      </td>
+                      <td className="pt-2 px-2" style={{ color: COL.inkMuted }}>
+                        {fmtEUR(t.cost)}
+                      </td>
+                    </tr>
+                  ))}
                 <tr>
                   <td colSpan={4} className="py-3 px-2 text-right font-medium" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
                     Gesamtkosten Rohstoffe
