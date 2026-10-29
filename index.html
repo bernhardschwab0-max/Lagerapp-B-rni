@@ -57,6 +57,16 @@
   @keyframes rise { 0% { transform: scale(.9); opacity: .6; } 50% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(.9); opacity: .6; } }
   .bottom-nav { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
   ::selection { background: #F9E7D8; }
+  /* Etiketten drucken: nur die Etiketten-Seiten (Papiergröße kommt aus dem Etikett-Reiter) */
+  .etikett-druck { display: none; }
+  @media print {
+    body.etikett-druckt { background: #fff; }
+    body.etikett-druckt > *:not(.etikett-druck) { display: none !important; }
+    body.etikett-druckt > .etikett-druck { display: block; }
+    .etikett-seite { break-after: page; page-break-after: always; }
+    .etikett-seite:last-child { break-after: auto; page-break-after: auto; }
+    .etikett-druck * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
 </style>
 </head>
 <body>
@@ -2314,7 +2324,7 @@ function App() {
             setOrderHistory={setOrderHistory}
           />
         )}
-        {tab === "etikett" && <EtikettTab materials={materials} recipes={recipes} />}
+        {tab === "etikett" && <EtikettTab materials={materials} setMaterials={setMaterials} recipes={recipes} />}
         {tab === "bestellung" && (
           <BestellungTab
             materials={materials}
@@ -3828,120 +3838,555 @@ function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrd
 }
 
 // ---------- Etikett Tab ----------
-function EtikettTab({ materials, recipes }) {
-  const [recipeId, setRecipeId] = useState(recipes[0]?.id ?? "");
+// Etikett nach LMIV (EU 1169/2011): Bezeichnung, "Zutaten:" absteigend nach Gewicht beim Mischen, zusammengesetzte Zutaten
+// (Sauerteig, Kochstück, Quellstück …) mit ihren Bestandteilen in Klammern, Allergene im Zutatenverzeichnis hervorgehoben,
+// Mengenangabe (%) für Zutaten aus der Bezeichnung, Nettofüllmenge, MHD oben mit Platz zum Stempeln, Aufbewahrung,
+// Name und Anschrift. Einstellungen (Hersteller, Format, Angaben je Rezept) bleiben nur auf diesem Gerät.
+const ETIKETT_SPEICHER = "lager_etikett_v1";
+const ETIKETT_FORMATE = [
+  { key: "a4-70x37", label: "A4-Bogen · 70 × 37 mm · 24 Stück (3 × 8)", breite: 70, hoehe: 37, spalten: 3, zeilen: 8, oben: 0.5, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "a4-70x42", label: "A4-Bogen · 70 × 42,3 mm · 21 Stück (3 × 7)", breite: 70, hoehe: 42.3, spalten: 3, zeilen: 7, oben: 0.4, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "a4-105x42", label: "A4-Bogen · 105 × 42,3 mm · 14 Stück (2 × 7)", breite: 105, hoehe: 42.3, spalten: 2, zeilen: 7, oben: 0.4, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "a4-105x57", label: "A4-Bogen · 105 × 57 mm · 10 Stück (2 × 5)", breite: 105, hoehe: 57, spalten: 2, zeilen: 5, oben: 6, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "a4-105x74", label: "A4-Bogen · 105 × 74 mm · 8 Stück (2 × 4)", breite: 105, hoehe: 74, spalten: 2, zeilen: 4, oben: 0.5, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "a4-105x148", label: "A4-Bogen · 105 × 148 mm · 4 Stück (2 × 2)", breite: 105, hoehe: 148, spalten: 2, zeilen: 2, oben: 0.5, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "eigen", label: "Eigenes A4-Format …" },
+  { key: "rolle", label: "Etikettendrucker (1 Etikett pro Seite)" },
+];
+const ETIKETT_EIGEN_STANDARD = { breite: 70, hoehe: 37, spalten: 3, zeilen: 8, oben: 0.5, links: 0, abstandH: 0, abstandV: 0 };
+const ETIKETT_ROLLE_STANDARD = { breite: 62, hoehe: 40 };
+// Allergen-Bezeichnungen nach Anhang II, wenn das Allergen im Zutatennamen nicht vorkommt ("enthält …")
+const ALLERGEN_ETIKETT = {
+  gluten: "GLUTEN", krebstiere: "KREBSTIERE", eier: "EI", fisch: "FISCH", erdnuesse: "ERDNÜSSE", soja: "SOJA", milch: "MILCH",
+  schalenfruechte: "SCHALENFRÜCHTE", sellerie: "SELLERIE", senf: "SENF", sesam: "SESAM", sulfite: "SCHWEFELDIOXID/SULFITE",
+  lupinen: "LUPINEN", weichtiere: "WEICHTIERE",
+};
+
+const etikettLaden = () => {
+  try {
+    return JSON.parse(localStorage.getItem(ETIKETT_SPEICHER) || "{}") || {};
+  } catch (e) {
+    return {};
+  }
+};
+const etikettSichern = (e) => {
+  try {
+    localStorage.setItem(ETIKETT_SPEICHER, JSON.stringify(e));
+  } catch (err) {}
+};
+// Name auf dem Etikett: eigener Etikett-Name, sonst Rohstoffname ohne Kürzel wie " D." / " R." (Kochstück D. → Kochstück)
+const etikettName = (m) => (m?.etikettName || "").trim() || (m?.name || "").replace(/\s+(D|R|RS|G|K)\.?$/i, "").trim();
+const istVorstufe = (m) => !!m?.vorteig?.teile?.length;
+// Umlaute angleichen, damit z.B. "Walnüsse" das Stichwort "walnuss" trifft
+const ohneUmlaut = (s) => (s || "").toLowerCase().replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss");
+const allergenImText = (text, key) => !!text && (ALLERGEN_KEYWORDS[key] || []).some((k) => new RegExp(ohneUmlaut(k), "i").test(ohneUmlaut(text)));
+const matAllergene = (m) => [...new Set([...(m?.allergene || []), ...extractAllergens(etikettName(m))])];
+const inGramm = (m, menge) => (["kg", "l"].includes(m?.unit) ? menge * 1000 : m?.unit === "Stk" ? 0 : menge);
+const zuStamm = (s) =>
+  (s || "")
+    .toLowerCase()
+    .replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss")
+    .replace(/[^a-z]/g, "");
+// Kommt die Zutat in der Bezeichnung vor (Kletzen → Kletzenbrot, Dinkelmehl → Dinkelbrot)? Dann ist die %-Angabe Pflicht.
+const zutatInBezeichnung = (m, bezeichnung) => {
+  const bez = zuStamm(bezeichnung);
+  const wort = zuStamm(etikettName(m).split(/[\s,(]/)[0]);
+  const stamm = wort.replace(/(vollkornmehl|vollmehl|mehl|schrot|flocken|kerne|brosel|gehackt|gerieben|gemahlen)$/, "").replace(/nusse$/, "nuss");
+  const kandidaten = [stamm, stamm.endsWith("nuss") ? "nuss" : ""].filter((k) => k.length >= 4);
+  return kandidaten.some((k) => bez.includes(k));
+};
+// Prozentangabe wie auf Etiketten üblich: ganze Zahl, unter 1 % mit einer Kommastelle
+const fmtProzentEtikett = (p) => `${p >= 1 ? Math.round(p) : p.toFixed(1).replace(".", ",")} %`;
+
+// Text mit hervorgehobenen Allergen-Wörtern (fett + GROSS)
+function AllergenText({ text, keys }) {
+  return text.split(/(\s+|[,;:()\/])/).map((w, i) =>
+    w && keys.some((k) => allergenImText(w, k)) ? (
+      <b key={i} style={{ textTransform: "uppercase" }}>
+        {w}
+      </b>
+    ) : (
+      <React.Fragment key={i}>{w}</React.Fragment>
+    )
+  );
+}
+
+// Eine Zutat fürs Zutatenverzeichnis, zusammengesetzte Zutaten mit ihren Bestandteilen in Klammern
+function EtikettZutat({ m, materials, prozent, tiefe = 0 }) {
+  const name = etikettName(m);
+  const teile =
+    istVorstufe(m) && tiefe < 3
+      ? [...m.vorteig.teile]
+          .sort((a, b) => (b.anteil || 0) - (a.anteil || 0))
+          .map((t) => materials.find((x) => x.id === t.materialId))
+          .filter(Boolean)
+      : null;
+  const zusatz = teile ? "" : (m.zusatzstoffe || "").trim();
+  const keys = teile ? [] : matAllergene(m);
+  const fehlend = keys.filter((k) => !allergenImText(name, k) && !allergenImText(zusatz, k));
+  return (
+    <>
+      <AllergenText text={name} keys={keys} />
+      {prozent != null && ` (${fmtProzentEtikett(prozent)})`}
+      {teile && (
+        <>
+          {" ("}
+          {teile.map((t, i) => (
+            <React.Fragment key={t.id}>
+              {i > 0 && ", "}
+              <EtikettZutat m={t} materials={materials} tiefe={tiefe + 1} />
+            </React.Fragment>
+          ))}
+          {")"}
+        </>
+      )}
+      {zusatz && (
+        <>
+          {" ("}
+          <AllergenText text={zusatz} keys={keys} />
+          {")"}
+        </>
+      )}
+      {fehlend.length > 0 && (
+        <>
+          {" (enthält "}
+          <b>{fehlend.map((k) => ALLERGEN_ETIKETT[k] || allergenLabel(k).toUpperCase()).join(", ")}</b>
+          {")"}
+        </>
+      )}
+    </>
+  );
+}
+
+// Das Etikett selbst – gleich für Vorschau und Druck (Maße in mm, Schrift in pt)
+function EtikettInhalt({ daten, schrift, vorschau }) {
+  const { bezeichnung, zutaten, materials, gewicht, gewichtPt, aufbewahrung, hersteller, adresse } = daten;
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: "0.8mm", fontFamily: "Arial, Helvetica, sans-serif", fontSize: `${schrift}pt`, lineHeight: 1.18, color: "#000" }}>
+      <div style={{ display: "flex", alignItems: "stretch", gap: "1.5mm", minHeight: "7mm" }}>
+        <span style={{ alignSelf: "center", whiteSpace: "nowrap" }}>mindestens haltbar bis:</span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: "22mm",
+            border: vorschau ? "1px dashed #C9B99A" : "none",
+            borderRadius: "1mm",
+            color: "#B8A98E",
+            fontSize: "7pt",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {vorschau ? "Stempel" : ""}
+        </span>
+      </div>
+      <div style={{ fontWeight: 700, fontSize: `${schrift * 1.35}pt`, lineHeight: 1.1 }}>{bezeichnung}</div>
+      <div>
+        <b>Zutaten: </b>
+        {zutaten.map((z, i) => (
+          <React.Fragment key={z.mat.id}>
+            <EtikettZutat m={z.mat} materials={materials} prozent={z.prozent} />
+            {i < zutaten.length - 1 ? ", " : "."}
+          </React.Fragment>
+        ))}
+      </div>
+      {aufbewahrung && <div>{aufbewahrung}</div>}
+      <div style={{ flex: 1 }} />
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "2mm" }}>
+        <div style={{ minWidth: 0 }}>
+          {hersteller && <div style={{ fontWeight: 700 }}>{hersteller}</div>}
+          {adresse && <div>{adresse}</div>}
+        </div>
+        {gewicht > 0 && <div style={{ fontWeight: 700, fontSize: `${gewichtPt}pt`, lineHeight: 1, whiteSpace: "nowrap" }}>{fmtNum(gewicht, 0)} g</div>}
+      </div>
+    </div>
+  );
+}
+
+function EtikettTab({ materials, setMaterials, recipes }) {
+  const [einst, setEinstRoh] = useState(etikettLaden);
+  const setEinst = (fn) =>
+    setEinstRoh((alt) => {
+      const neu = typeof fn === "function" ? fn(alt) : fn;
+      etikettSichern(neu);
+      return neu;
+    });
+  const [recipeId, setRecipeId] = useState(() => (recipes.some((r) => r.id === einst.zuletzt) ? einst.zuletzt : recipes[0]?.id ?? ""));
   const recipe = recipes.find((r) => r.id === recipeId);
+  const pr = einst.rezepte?.[recipeId] || {};
+  const setPr = (patch) => setEinst((e) => ({ ...e, zuletzt: recipeId, rezepte: { ...(e.rezepte || {}), [recipeId]: { ...(e.rezepte?.[recipeId] || {}), ...patch } } }));
+  const dazu = pr.dazu || [];
+  const [namenOffen, setNamenOffen] = useState(false);
+  const [druck, setDruck] = useState(false);
+  const [anzahl, setAnzahl] = useState("");
+  const [start, setStart] = useState("1");
 
-  const items = useMemo(() => {
-    if (!recipe) return [];
-    // Gleiche Zutat aus mehreren Abschnitten (z.B. Wasser im Vorteig und Hauptteig) nur einmal aufs Etikett
-    const summe = new Map();
-    recipe.items.forEach((it) => summe.set(it.materialId, (summe.get(it.materialId) || 0) + (Number(it.menge) || 0)));
-    return [...summe.entries()]
-      .map(([materialId, menge]) => ({ materialId, menge, mat: materials.find((m) => m.id === materialId) }))
-      .filter((it) => it.mat)
-      .sort((a, b) => b.menge - a.menge);
-  }, [recipe, materials]);
+  const bezeichnung = (pr.bezeichnung ?? recipe?.name ?? "").trim();
+  const gewicht = Number(String(pr.gewicht ?? "").replace(",", ".")) || 0;
+  const formatKey = einst.format || "a4-70x37";
+  const format =
+    formatKey === "eigen"
+      ? { key: "eigen", ...ETIKETT_EIGEN_STANDARD, ...(einst.eigen || {}) }
+      : formatKey === "rolle"
+      ? { key: "rolle", ...ETIKETT_ROLLE_STANDARD, ...(einst.rolle || {}), spalten: 1, zeilen: 1, oben: 0, links: 0, abstandH: 0, abstandV: 0 }
+      : ETIKETT_FORMATE.find((f) => f.key === formatKey) || ETIKETT_FORMATE[0];
+  const zahlFeld = (v, d) => (Number(String(v ?? "").replace(",", ".")) > 0 ? Number(String(v).replace(",", ".")) : d);
+  const breite = zahlFeld(format.breite, 70);
+  const hoehe = zahlFeld(format.hoehe, 37);
+  const proBogen = Math.max(1, Math.round(zahlFeld(format.spalten, 1)) * Math.round(zahlFeld(format.zeilen, 1)));
+  // Kleine Etiketten (größte Fläche unter 80 cm²): Mindest-x-Höhe 0,9 mm statt 1,2 mm (LMIV Anhang IV)
+  const minSchrift = breite * hoehe < 8000 ? 5 : 7;
+  // Ziffernhöhe der Nettofüllmenge: bis 50 g 2 mm, bis 200 g 3 mm, bis 1 kg 4 mm, darüber 6 mm
+  const gewichtPt = gewicht > 1000 ? 24 : gewicht > 200 ? 16 : gewicht > 50 ? 12 : 8;
 
-  const allergenKeys = useMemo(() => {
-    const set = new Set();
-    items.forEach((it) => it.mat.allergene.forEach((a) => set.add(a)));
-    return [...set];
-  }, [items]);
+  // Zutaten: zusammengesetzte Zutaten (Vorstufen) bleiben als eine Zutat mit ihrem Gesamtgewicht,
+  // für die %-Angabe zählt jede Zutat mit allem, was auch in den Vorstufen steckt
+  const { zutaten, quidVorschlag } = useMemo(() => {
+    if (!recipe) return { zutaten: [], quidVorschlag: {} };
+    const zeilen = [{ recipe, menge: 1 }, ...dazu.map((d) => ({ recipe: recipes.find((r) => r.id === d.recipeId), menge: Number(d.menge) || 0 }))].filter((z) => z.recipe && z.menge > 0);
+    const direkt = new Map();
+    zeilen.forEach(({ recipe: r, menge }) => {
+      const f = menge / (r.ausbringungMenge || 1);
+      r.items.forEach((it) => {
+        const m = materials.find((x) => x.id === it.materialId);
+        if (m) direkt.set(m.id, (direkt.get(m.id) || 0) + inGramm(m, (Number(it.menge) || 0) * f));
+      });
+    });
+    const roh = expandVorteige([...direkt].map(([materialId, menge]) => ({ materialId, menge })), materials);
+    const gesamt = roh.reduce((s, r) => s + r.menge, 0) || 1;
+    const proRoh = new Map(roh.map((r) => [r.materialId, r.menge]));
+    const vorschlag = {};
+    const liste = [...direkt]
+      .map(([id, g]) => ({ mat: materials.find((m) => m.id === id), g }))
+      .sort((a, b) => b.g - a.g)
+      .map((z) => {
+        vorschlag[z.mat.id] = zutatInBezeichnung(z.mat, bezeichnung);
+        const anzeigen = pr.quid?.[z.mat.id] ?? vorschlag[z.mat.id];
+        const anteil = istVorstufe(z.mat) ? z.g : proRoh.get(z.mat.id) ?? z.g;
+        return { ...z, prozent: anzeigen ? (anteil / gesamt) * 100 : null };
+      });
+    return { zutaten: liste, quidVorschlag: vorschlag };
+  }, [recipe, recipes, materials, dazu, bezeichnung, pr.quid]);
 
-  const additives = items.filter((it) => it.mat.zusatzstoffe?.trim());
+  // Alle Rohstoffe, die auf dem Etikett vorkommen (auch in den Vorstufen) – für die Namens-Liste
+  const etikettRohstoffe = useMemo(() => {
+    const ids = [];
+    const rein = (m, t = 0) => {
+      if (!m || ids.includes(m.id)) return;
+      ids.push(m.id);
+      if (istVorstufe(m) && t < 3) m.vorteig.teile.forEach((x) => rein(materials.find((y) => y.id === x.materialId), t + 1));
+    };
+    zutaten.forEach((z) => rein(z.mat));
+    return ids.map((id) => materials.find((m) => m.id === id));
+  }, [zutaten, materials]);
+
+  const daten = { bezeichnung, zutaten, materials, gewicht, gewichtPt, aufbewahrung: (pr.aufbewahrung || "").trim(), hersteller: (einst.hersteller || "").trim(), adresse: (einst.adresse || "").trim() };
+
+  // Schriftgröße so groß wie möglich, aber das Etikett darf nicht überlaufen (Messung an der Vorschau in echter Größe)
+  const messRef = React.useRef(null);
+  const [schrift, setSchrift] = useState(9);
+  const [zuVoll, setZuVoll] = useState(false);
+  const inhaltSchluessel = JSON.stringify([bezeichnung, gewicht, daten.aufbewahrung, daten.hersteller, daten.adresse, breite, hoehe, zutaten.map((z) => [etikettName(z.mat), z.prozent, z.mat.zusatzstoffe])]);
+  const letzterSchluessel = React.useRef(null);
+  React.useLayoutEffect(() => {
+    // nach jedem Zeichnen: neuer Inhalt → wieder mit 9 pt anfangen; läuft es über → 0,5 pt kleiner (bis zur Mindestgröße)
+    const el = messRef.current;
+    if (!el) return;
+    const schluessel = `${inhaltSchluessel}|${minSchrift}`;
+    if (letzterSchluessel.current !== schluessel) {
+      letzterSchluessel.current = schluessel;
+      if (schrift !== 9) {
+        setSchrift(9);
+        return;
+      }
+    }
+    const ueber = el.scrollHeight > el.clientHeight + 1;
+    if (ueber && schrift - 0.5 >= minSchrift) setSchrift(schrift - 0.5);
+    else if (zuVoll !== ueber) setZuVoll(ueber);
+  });
+
+  // Vorschau auf Bildschirmbreite verkleinern
+  const huelleRef = React.useRef(null);
+  const [massstab, setMassstab] = useState(1);
+  React.useLayoutEffect(() => {
+    const anpassen = () => {
+      const w = huelleRef.current?.clientWidth || 0;
+      const px = (breite * 96) / 25.4;
+      setMassstab(w && px > w ? w / px : 1);
+    };
+    anpassen();
+    window.addEventListener("resize", anpassen);
+    return () => window.removeEventListener("resize", anpassen);
+  }, [breite, recipeId]);
+
+  // Drucken: nur die Etiketten-Seiten, Papiergröße passend zum Format
+  useEffect(() => {
+    if (!druck) return;
+    const style = document.createElement("style");
+    style.id = "etikett-seite";
+    style.textContent = format.key === "rolle" ? `@page { size: ${breite}mm ${hoehe}mm; margin: 0; }` : "@page { size: A4 portrait; margin: 0; }";
+    document.head.appendChild(style);
+    document.body.classList.add("etikett-druckt");
+    const fertig = () => setDruck(false);
+    window.addEventListener("afterprint", fertig);
+    const t = setTimeout(() => window.print(), 150);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("afterprint", fertig);
+      document.body.classList.remove("etikett-druckt");
+      style.remove();
+    };
+  }, [druck]);
+
+  const startPos = Math.min(proBogen, Math.max(1, Math.round(Number(start) || 1)));
+  const stueck = Math.max(1, Math.round(Number(anzahl) || (format.key === "rolle" ? 1 : proBogen - startPos + 1)));
+  const seiten = [];
+  if (druck) {
+    const plaetze = startPos - 1 + stueck;
+    const anzahlSeiten = format.key === "rolle" ? stueck : Math.ceil(plaetze / proBogen);
+    for (let p = 0; p < anzahlSeiten; p++) {
+      const etiketten = [];
+      for (let i = 0; i < (format.key === "rolle" ? 1 : proBogen); i++) {
+        const nr = format.key === "rolle" ? p : p * proBogen + i;
+        if (format.key !== "rolle" && (nr < startPos - 1 || nr >= plaetze)) continue;
+        const spalte = i % Math.round(zahlFeld(format.spalten, 1));
+        const zeile = Math.floor(i / Math.round(zahlFeld(format.spalten, 1)));
+        etiketten.push({ i, links: zahlFeld(format.links, 0) + spalte * (breite + (Number(format.abstandH) || 0)), oben: zahlFeld(format.oben, 0) + zeile * (hoehe + (Number(format.abstandV) || 0)) });
+      }
+      seiten.push(etiketten);
+    }
+  }
+
+  const fehler = [];
+  if (!bezeichnung) fehler.push("Bezeichnung fehlt");
+  if (!(gewicht > 0)) fehler.push("Nettofüllmenge (Gewicht) fehlt");
+  if (!daten.hersteller || !daten.adresse) fehler.push("Name und Anschrift fehlen (unten bei „Hersteller“)");
+  const glutenOhneGetreide = etikettRohstoffe.filter((m) => !istVorstufe(m) && matAllergene(m).includes("gluten") && !allergenImText(etikettName(m), "gluten") && !allergenImText(m.zusatzstoffe, "gluten"));
+
+  const zahlInput = (wert, onChange, ph, breitePx = 70) => (
+    <input style={{ ...inputStyle, width: breitePx }} inputMode="decimal" value={wert ?? ""} placeholder={ph} onChange={(e) => onChange(e.target.value)} />
+  );
+
+  if (!recipe) {
+    return <Card><p className="text-sm" style={{ color: COL.inkMuted }}>Noch keine Rezepte vorhanden.</p></Card>;
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <Field label="Rezept für Etikett wählen">
-          <select style={{ ...inputStyle, maxWidth: 320 }} value={recipeId} onChange={(e) => setRecipeId(e.target.value)}>
-            {groupByKategorie(recipes).map((g) => (
-              <optgroup key={g.kategorie} label={g.kategorie}>
-                {g.items.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
+        <div className="flex flex-col gap-3">
+          <Field label="Rezept für Etikett wählen">
+            <select
+              style={{ ...inputStyle, maxWidth: 360 }}
+              value={recipeId}
+              onChange={(e) => {
+                setRecipeId(e.target.value);
+                setEinst((x) => ({ ...x, zuletzt: e.target.value }));
+              }}
+            >
+              {groupByKategorie(recipes).map((g) => (
+                <optgroup key={g.kategorie} label={g.kategorie}>
+                  {g.items.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </Field>
+          {dazu.map((d, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <span className="text-sm" style={{ color: COL.inkMuted }}>+</span>
+              <select style={{ ...inputStyle, flex: "1 1 200px", minWidth: 0 }} value={d.recipeId} onChange={(e) => setPr({ dazu: dazu.map((x, j) => (j === i ? { ...x, recipeId: e.target.value } : x)) })} aria-label="Weiteres Rezept">
+                {groupByKategorie(recipes).map((g) => (
+                  <optgroup key={g.kategorie} label={g.kategorie}>
+                    {g.items.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-        </Field>
+              </select>
+              {zahlInput(d.menge, (v) => setPr({ dazu: dazu.map((x, j) => (j === i ? { ...x, menge: v } : x)) }), "1", 64)}
+              <span className="text-xs" style={{ color: COL.inkMuted }}>Ansatz pro Ansatz {recipe.name}</span>
+              <button onClick={() => setPr({ dazu: dazu.filter((_, j) => j !== i) })} style={{ color: COL.warn }} aria-label="Rezept entfernen">
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+          <button onClick={() => setPr({ dazu: [...dazu, { recipeId: recipes.find((r) => r.id !== recipeId)?.id || recipeId, menge: "1" }] })} className="text-sm font-medium flex items-center gap-1 w-fit" style={{ color: COL.accent }}>
+            <Plus size={14} /> Weiteres Rezept gehört dazu (z.B. Früchtemischung)
+          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Bezeichnung auf dem Etikett">
+              <input style={inputStyle} value={pr.bezeichnung ?? recipe.name} onChange={(e) => setPr({ bezeichnung: e.target.value })} />
+            </Field>
+            <Field label="Nettofüllmenge in g (Gewicht pro Stück)">
+              <input style={inputStyle} inputMode="decimal" value={pr.gewicht ?? ""} placeholder="z.B. 500" onChange={(e) => setPr({ gewicht: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Aufbewahrung (falls nötig)">
+            <input style={inputStyle} value={pr.aufbewahrung ?? ""} placeholder="z.B. Kühl und trocken lagern / Gekühlt lagern bei max. +7 °C" onChange={(e) => setPr({ aufbewahrung: e.target.value })} />
+          </Field>
+        </div>
       </Card>
 
-      {recipe && (
-        <div className="relative mx-auto w-full max-w-md">
+      <div ref={huelleRef} className="w-full">
+        <div style={{ width: `${breite * massstab}mm`, height: `${hoehe * massstab}mm`, margin: "0 auto" }}>
           <div
-            className="relative rounded-2xl p-6"
-            style={{ backgroundColor: "#fff", border: `2px dashed ${COL.line}` }}
+            style={{
+              width: `${breite}mm`,
+              height: `${hoehe}mm`,
+              transform: `scale(${massstab})`,
+              transformOrigin: "top left",
+              backgroundColor: "#fff",
+              border: `1px solid ${zuVoll ? COL.warn : COL.line}`,
+              borderRadius: "2mm",
+              boxShadow: "0 2px 10px rgba(59,42,30,0.08)",
+              boxSizing: "border-box",
+            }}
           >
-            {/* ticket notches */}
-            <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full" style={{ backgroundColor: COL.bg }} />
-            <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full" style={{ backgroundColor: COL.bg }} />
-
-            <div className="text-center mb-4">
-              <h3 className="text-xl" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
-                {recipe.name}
-              </h3>
-              <p className="text-xs" style={{ color: COL.inkMuted }}>
-                Ausbringung: {fmtNum(recipe.ausbringungMenge)} {recipe.ausbringungEinheit}
-              </p>
+            <div ref={messRef} style={{ width: "100%", height: "100%", padding: "2.5mm", boxSizing: "border-box", overflow: "hidden" }}>
+              <EtikettInhalt daten={daten} schrift={schrift} vorschau />
             </div>
-
-            <div className="mb-4">
-              <p className="text-xs font-semibold uppercase mb-1" style={{ color: COL.inkMuted, letterSpacing: "0.05em" }}>
-                Zutaten
-              </p>
-              <p className="text-sm leading-relaxed" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                {items.map((it, i) => {
-                  const hasAllergen = it.mat.allergene.length > 0;
-                  return (
-                    <span key={i}>
-                      <span style={{ fontWeight: hasAllergen ? 700 : 400, textTransform: hasAllergen ? "uppercase" : "none" }}>
-                        {it.mat.name}
-                      </span>
-                      {it.mat.zusatzstoffe?.trim() && <span> ({it.mat.zusatzstoffe.trim()})</span>}
-                      {i < items.length - 1 ? ", " : "."}
-                    </span>
-                  );
-                })}
-              </p>
-            </div>
-
-            {allergenKeys.length > 0 && (
-              <div className="mb-3 p-3 rounded-lg" style={{ backgroundColor: COL.amberSoft }}>
-                <p className="text-xs font-semibold mb-1" style={{ color: COL.amber }}>
-                  Enthält Allergene:
-                </p>
-                <p className="text-sm font-semibold" style={{ color: COL.amber }}>
-                  {allergenKeys.map(allergenLabel).join(", ")}
-                </p>
-              </div>
-            )}
-
-            {additives.length > 0 && (
-              <div className="mb-1">
-                <p className="text-xs font-semibold uppercase mb-1" style={{ color: COL.inkMuted, letterSpacing: "0.05em" }}>
-                  Zusatzstoffe
-                </p>
-                <ul className="text-xs" style={{ color: COL.inkMuted }}>
-                  {additives.map((it, i) => (
-                    <li key={i}>
-                      {it.mat.name}: {it.mat.zusatzstoffe}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {allergenKeys.length === 0 && (
-              <p className="text-xs" style={{ color: COL.ok }}>
-                Keine deklarierten Allergene enthalten.
-              </p>
-            )}
           </div>
         </div>
+        <p className="text-xs text-center mt-2" style={{ color: COL.inkMuted }}>
+          Vorschau in echter Größe ({fmtNum(breite, 1)} × {fmtNum(hoehe, 1)} mm{massstab < 1 ? ", hier verkleinert" : ""}) · Schrift {fmtNum(schrift, 1)} pt
+        </p>
+      </div>
+
+      {(fehler.length > 0 || zuVoll || glutenOhneGetreide.length > 0) && (
+        <div className="text-sm px-4 py-3 rounded-2xl flex flex-col gap-1" style={{ backgroundColor: COL.warnSoft, color: COL.warn }}>
+          {fehler.map((f) => (
+            <div key={f}>⚠️ {f}</div>
+          ))}
+          {zuVoll && <div>⚠️ Der Text passt nicht aufs Etikett (kleinste erlaubte Schrift {minSchrift} pt) – bitte ein größeres Format wählen.</div>}
+          {glutenOhneGetreide.length > 0 && (
+            <div>
+              ⚠️ Bei <b>{glutenOhneGetreide.map(etikettName).join(", ")}</b> muss die Getreideart aufs Etikett (z.B. „WEIZENstärke“, „GERSTENmalz“) – unten bei „Zutatennamen“ eintragen. Bis dahin steht dort „enthält GLUTEN“.
+            </div>
+          )}
+        </div>
       )}
+
+      <Card>
+        <button onClick={() => setNamenOffen(!namenOffen)} className="w-full flex items-center justify-between text-left">
+          <span className="font-semibold">Zutatennamen & %-Angaben</span>
+          <span style={{ color: COL.inkMuted }}>{namenOffen ? "▴" : "▾"}</span>
+        </button>
+        {namenOffen && (
+          <div className="flex flex-col gap-2 mt-3">
+            <p className="text-xs" style={{ color: COL.inkMuted }}>
+              So heißt die Zutat auf dem Etikett (gilt für alle Etiketten, z.B. „Roggen 960“ → „Roggenmehl“). Allergene werden automatisch fett und groß geschrieben. „%“ = Mengenangabe – Pflicht, wenn die Zutat in der Bezeichnung vorkommt (wird automatisch vorgeschlagen).
+            </p>
+            {etikettRohstoffe.map((m) => {
+              const z = zutaten.find((x) => x.mat.id === m.id);
+              const quid = z ? pr.quid?.[m.id] ?? quidVorschlag[m.id] : false;
+              return (
+                <div key={m.id} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs shrink-0" style={{ color: COL.inkMuted, width: 110 }}>
+                    {m.name}
+                    {istVorstufe(m) ? " (Vorstufe)" : ""}
+                  </span>
+                  <input
+                    style={{ ...inputStyle, flex: "1 1 160px", minWidth: 0 }}
+                    value={m.etikettName ?? ""}
+                    placeholder={etikettName({ name: m.name })}
+                    onChange={(e) => setMaterials((prev) => prev.map((x) => (x.id === m.id ? { ...x, etikettName: e.target.value } : x)))}
+                  />
+                  {z && (
+                    <label className="flex items-center gap-1 text-xs shrink-0">
+                      <input type="checkbox" checked={!!quid} onChange={(e) => setPr({ quid: { ...(pr.quid || {}), [m.id]: e.target.checked } })} /> %
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="font-semibold mb-3">🖨 Drucken</h3>
+        <div className="flex flex-col gap-3">
+          <Field label="Etikettenpapier">
+            <select style={inputStyle} value={formatKey} onChange={(e) => setEinst((x) => ({ ...x, format: e.target.value }))}>
+              {ETIKETT_FORMATE.map((f) => (
+                <option key={f.key} value={f.key}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {formatKey === "eigen" && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[["breite", "Breite mm"], ["hoehe", "Höhe mm"], ["spalten", "Spalten"], ["zeilen", "Zeilen"], ["oben", "Rand oben mm"], ["links", "Rand links mm"], ["abstandH", "Abstand waagrecht mm"], ["abstandV", "Abstand senkrecht mm"]].map(([k, l]) => (
+                <Field key={k} label={l}>
+                  {zahlInput((einst.eigen || {})[k] ?? ETIKETT_EIGEN_STANDARD[k], (v) => setEinst((x) => ({ ...x, eigen: { ...ETIKETT_EIGEN_STANDARD, ...(x.eigen || {}), [k]: v } })), "", "100%")}
+                </Field>
+              ))}
+            </div>
+          )}
+          {formatKey === "rolle" && (
+            <div className="grid grid-cols-2 gap-2">
+              {[["breite", "Breite mm"], ["hoehe", "Höhe mm"]].map(([k, l]) => (
+                <Field key={k} label={l}>
+                  {zahlInput((einst.rolle || {})[k] ?? ETIKETT_ROLLE_STANDARD[k], (v) => setEinst((x) => ({ ...x, rolle: { ...ETIKETT_ROLLE_STANDARD, ...(x.rolle || {}), [k]: v } })), "", "100%")}
+                </Field>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Anzahl Etiketten">{zahlInput(anzahl, setAnzahl, String(format.key === "rolle" ? 1 : proBogen - startPos + 1), "100%")}</Field>
+            {format.key !== "rolle" && <Field label={`Start bei Etikett (1–${proBogen})`}>{zahlInput(start, setStart, "1", "100%")}</Field>}
+          </div>
+          <p className="text-xs" style={{ color: COL.inkMuted }}>
+            „Start bei“ ist für angebrauchte Bögen: z.B. 5, wenn die ersten 4 Etiketten schon weg sind. Beim Drucken „Tatsächliche Größe / 100 %“ und „keine Ränder“ wählen.
+          </p>
+          <button onClick={() => setDruck(true)} className="text-sm font-medium px-3 py-2.5 rounded-lg" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+            🖨 {stueck} Etikett{stueck === 1 ? "" : "en"} drucken
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="font-semibold mb-3">🏠 Hersteller (steht auf jedem Etikett)</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Field label="Name / Firma">
+            <input style={inputStyle} value={einst.hersteller ?? ""} placeholder="z.B. Börni's Backstube" onChange={(e) => setEinst((x) => ({ ...x, hersteller: e.target.value }))} />
+          </Field>
+          <Field label="Anschrift">
+            <input style={inputStyle} value={einst.adresse ?? ""} placeholder="Straße Nr., PLZ Ort" onChange={(e) => setEinst((x) => ({ ...x, adresse: e.target.value }))} />
+          </Field>
+        </div>
+        <p className="text-xs mt-3" style={{ color: COL.inkMuted }}>
+          Hersteller, Format und die Angaben je Rezept bleiben auf diesem Gerät gespeichert. Eine Nährwerttabelle ist für kleine Handwerksbetriebe, die direkt an Kunden oder an Geschäfte in der Umgebung liefern, nicht nötig (LMIV Anhang V Nr. 19).
+        </p>
+      </Card>
+
+      {druck &&
+        ReactDOM.createPortal(
+          <div className="etikett-druck">
+            {seiten.map((etiketten, p) => (
+              <div
+                key={p}
+                className="etikett-seite"
+                style={format.key === "rolle" ? { width: `${breite}mm`, height: `${hoehe}mm`, position: "relative", overflow: "hidden" } : { width: "210mm", height: "297mm", position: "relative", overflow: "hidden" }}
+              >
+                {etiketten.map((e) => (
+                  <div key={e.i} style={{ position: "absolute", left: `${e.links}mm`, top: `${e.oben}mm`, width: `${breite}mm`, height: `${hoehe}mm`, padding: "2.5mm", boxSizing: "border-box", overflow: "hidden" }}>
+                    <EtikettInhalt daten={daten} schrift={schrift} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
