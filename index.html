@@ -4081,7 +4081,18 @@ function EtikettTab({ materials, setMaterials, recipes }) {
     return ids.map((id) => materials.find((m) => m.id === id));
   }, [zutaten, materials]);
 
-  const daten = { bezeichnung, zutaten, materials, gewicht, gewichtPt, aufbewahrung: (pr.aufbewahrung || "").trim(), hersteller: (einst.hersteller || "").trim(), adresse: (einst.adresse || "").trim() };
+  // Name und Anschrift nur, wenn eingeschaltet (Börni 29.10.2026: derzeit nicht nötig)
+  const mitHersteller = !!einst.mitHersteller;
+  const daten = {
+    bezeichnung,
+    zutaten,
+    materials,
+    gewicht,
+    gewichtPt,
+    aufbewahrung: (pr.aufbewahrung || "").trim(),
+    hersteller: mitHersteller ? (einst.hersteller || "").trim() : "",
+    adresse: mitHersteller ? (einst.adresse || "").trim() : "",
+  };
 
   // Schriftgröße so groß wie möglich, aber das Etikett darf nicht überlaufen (Messung an der Vorschau in echter Größe)
   const messRef = React.useRef(null);
@@ -4161,7 +4172,7 @@ function EtikettTab({ materials, setMaterials, recipes }) {
   const fehler = [];
   if (!bezeichnung) fehler.push("Bezeichnung fehlt");
   if (!(gewicht > 0)) fehler.push("Nettofüllmenge (Gewicht) fehlt");
-  if (!daten.hersteller || !daten.adresse) fehler.push("Name und Anschrift fehlen (unten bei „Hersteller“)");
+  if (mitHersteller && (!daten.hersteller || !daten.adresse)) fehler.push("Name und Anschrift fehlen (unten bei „Hersteller“)");
   const glutenOhneGetreide = etikettRohstoffe.filter((m) => !istVorstufe(m) && matAllergene(m).includes("gluten") && !allergenImText(etikettName(m), "gluten") && !allergenImText(m.zusatzstoffe, "gluten"));
 
   const zahlInput = (wert, onChange, ph, breitePx = 70) => (
@@ -4354,17 +4365,22 @@ function EtikettTab({ materials, setMaterials, recipes }) {
       </Card>
 
       <Card>
-        <h3 className="font-semibold mb-3">🏠 Hersteller (steht auf jedem Etikett)</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Name / Firma">
-            <input style={inputStyle} value={einst.hersteller ?? ""} placeholder="z.B. Börni's Backstube" onChange={(e) => setEinst((x) => ({ ...x, hersteller: e.target.value }))} />
-          </Field>
-          <Field label="Anschrift">
-            <input style={inputStyle} value={einst.adresse ?? ""} placeholder="Straße Nr., PLZ Ort" onChange={(e) => setEinst((x) => ({ ...x, adresse: e.target.value }))} />
-          </Field>
-        </div>
+        <label className="flex items-center gap-2 font-semibold">
+          <input type="checkbox" checked={mitHersteller} onChange={(e) => setEinst((x) => ({ ...x, mitHersteller: e.target.checked }))} />
+          🏠 Name und Anschrift aufs Etikett
+        </label>
+        {mitHersteller && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <Field label="Name / Firma">
+              <input style={inputStyle} value={einst.hersteller ?? ""} placeholder="z.B. Börni's Backstube" onChange={(e) => setEinst((x) => ({ ...x, hersteller: e.target.value }))} />
+            </Field>
+            <Field label="Anschrift">
+              <input style={inputStyle} value={einst.adresse ?? ""} placeholder="Straße Nr., PLZ Ort" onChange={(e) => setEinst((x) => ({ ...x, adresse: e.target.value }))} />
+            </Field>
+          </div>
+        )}
         <p className="text-xs mt-3" style={{ color: COL.inkMuted }}>
-          Hersteller, Format und die Angaben je Rezept bleiben auf diesem Gerät gespeichert. Eine Nährwerttabelle ist für kleine Handwerksbetriebe, die direkt an Kunden oder an Geschäfte in der Umgebung liefern, nicht nötig (LMIV Anhang V Nr. 19).
+          Sobald du verpackte Ware im eigenen Betrieb oder an Geschäfte verkaufst, gehören Name und Anschrift aufs Etikett – dann einfach anhaken. Format und die Angaben je Rezept bleiben auf diesem Gerät gespeichert. Eine Nährwerttabelle ist für kleine Handwerksbetriebe, die direkt an Kunden oder an Geschäfte in der Umgebung liefern, nicht nötig (LMIV Anhang V Nr. 19).
         </p>
       </Card>
 
