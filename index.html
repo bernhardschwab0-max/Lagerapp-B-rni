@@ -3834,8 +3834,7 @@ function KalkulationTab({ materials, setMaterials, recipes, orderHistory, setOrd
 // Name und Anschrift (optional). Druck über eine PDF-Datei mit exakten Maßen. Einstellungen (Format, Angaben je Rezept) bleiben nur auf diesem Gerät.
 const ETIKETT_SPEICHER = "lager_etikett_v1";
 const ETIKETT_FORMATE = [
-  { key: "a4-70x30", label: "A4-Bogen · 70 × 30 mm · 30 Stück (3 × 10)", breite: 70, hoehe: 29.7, spalten: 3, zeilen: 10, oben: 0, links: 0, abstandH: 0, abstandV: 0 },
-  { key: "a4-70x30-27", label: "A4-Bogen · 70 × 30 mm · 27 Stück (3 × 9)", breite: 70, hoehe: 30, spalten: 3, zeilen: 9, oben: 13.5, links: 0, abstandH: 0, abstandV: 0 },
+  { key: "a4-70x36", label: "A4-Bogen · 70 × 36 mm · 24 Stück (3 × 8)", breite: 70, hoehe: 36, spalten: 3, zeilen: 8, oben: 4.5, links: 0, abstandH: 0, abstandV: 0 },
   { key: "a4-70x37", label: "A4-Bogen · 70 × 37 mm · 24 Stück (3 × 8)", breite: 70, hoehe: 37, spalten: 3, zeilen: 8, oben: 0.5, links: 0, abstandH: 0, abstandV: 0 },
   { key: "a4-70x42", label: "A4-Bogen · 70 × 42,3 mm · 21 Stück (3 × 7)", breite: 70, hoehe: 42.3, spalten: 3, zeilen: 7, oben: 0.4, links: 0, abstandH: 0, abstandV: 0 },
   { key: "a4-105x42", label: "A4-Bogen · 105 × 42,3 mm · 14 Stück (2 × 7)", breite: 105, hoehe: 42.3, spalten: 2, zeilen: 7, oben: 0.4, links: 0, abstandH: 0, abstandV: 0 },
@@ -4124,7 +4123,7 @@ function EtikettTab({ materials, setMaterials, recipes }) {
 
   const bezeichnung = (pr.bezeichnung ?? recipe?.name ?? "").trim();
   const gewicht = Number(String(pr.gewicht ?? "").replace(",", ".")) || 0;
-  const formatKey = einst.format || "a4-70x30";
+  const formatKey = einst.format || "a4-70x36";
   const format =
     formatKey === "eigen"
       ? { key: "eigen", ...ETIKETT_EIGEN_STANDARD, ...(einst.eigen || {}) }
