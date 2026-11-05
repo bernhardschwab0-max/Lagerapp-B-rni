@@ -1256,6 +1256,101 @@ function BackzettelEingang({ eingang, materials, setMaterials, orderHistory, set
   );
 }
 
+// ---------- Rezept per Link übernehmen ("#rezept=…") ----------
+// Rezepte stehen nicht im öffentlichen Code. Ein Link enthält das Rezept (base64-JSON), die App zeigt es zur
+// Kontrolle und legt es mit einem Tipp an – fehlende Rohstoffe werden neu angelegt (Preis 0, Einheit wie angegeben).
+// Format: { v: 1, name, kategorie, stueck, teiggewicht, backen, anleitung, gruppen: [{ titel, z: [[Zutat, Menge, Einheit?]] }] }
+function leseRezeptAusLink() {
+  try {
+    if (window.location.hash.startsWith("#rezept=")) {
+      sessionStorage.setItem("rezept_eingang", decodeURIComponent(window.location.hash.slice("#rezept=".length)));
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    const raw = sessionStorage.getItem("rezept_eingang");
+    if (!raw) return null;
+    const bin = atob(raw.replace(/-/g, "+").replace(/_/g, "/"));
+    const p = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+    return p && typeof p.name === "string" && Array.isArray(p.gruppen) ? p : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function RezeptEingang({ eingang, materials, setMaterials, recipes, setRecipes, onDone }) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const zeilen = eingang.gruppen.flatMap((g) =>
+    (g.z || []).map(([name, menge, einheit]) => {
+      const n = String(name || "").trim();
+      return { name: n, menge: Number(menge) || 0, einheit: einheit || "g", gruppe: (g.titel || "").trim(), mat: findByName(materials, ZUTAT_ALIAS[n] || [n]) };
+    })
+  ).filter((z) => z.name);
+  const neue = [...new Set(zeilen.filter((z) => !z.mat).map((z) => z.name))];
+  const vorhanden = recipes.find((r) => norm(r.name) === norm(eingang.name));
+
+  const uebernehmen = () => {
+    const neuMat = neue.map((n) => ({ id: uid(), name: n, price: 0, unit: zeilen.find((z) => z.name === n).einheit, mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: extractAllergens(n) }));
+    const items = zeilen.map((z) => {
+      const m = z.mat || neuMat.find((x) => x.name === z.name);
+      const it = { materialId: m.id, menge: z.menge };
+      if (z.gruppe) it.gruppe = z.gruppe;
+      return it;
+    });
+    const daten = {
+      name: eingang.name.trim(),
+      kategorie: eingang.kategorie || "",
+      ausbringungMenge: 1,
+      ausbringungEinheit: "Ansatz",
+      stueckProAnsatz: Number(eingang.stueck) || 1,
+      teiggewicht: eingang.teiggewicht || "",
+      backen: eingang.backen || "",
+      anleitung: eingang.anleitung || "",
+      items,
+    };
+    if (neuMat.length) setMaterials((prev) => [...prev, ...neuMat]);
+    setRecipes((prev) => (vorhanden ? prev.map((r) => (r.id === vorhanden.id ? { ...r, ...daten } : r)) : [...prev, { id: uid(), ...daten }]));
+    onDone(true);
+  };
+
+  return (
+    <div className="mb-6 rounded-2xl p-4 sm:p-5" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}`, boxShadow: "0 8px 30px rgba(196,98,45,0.15)", animation: "fadeIn .3s ease" }}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <div className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>📥 Neues Rezept: {eingang.name}</div>
+          <div className="text-sm" style={{ color: COL.inkMuted }}>{[eingang.kategorie, `${Number(eingang.stueck) || 1} Stück pro Ansatz`].filter(Boolean).join(" · ")}</div>
+        </div>
+        <button onClick={() => onDone(false)} style={{ color: COL.inkMuted }} aria-label="Verwerfen"><X size={18} /></button>
+      </div>
+      {vorhanden && (
+        <div className="text-sm px-3 py-2 rounded-lg mb-3" style={{ backgroundColor: COL.amberSoft, color: COL.amber }}>
+          Ein Rezept „{vorhanden.name}“ gibt es schon – es wird durch dieses ersetzt.
+        </div>
+      )}
+      <div className="rounded-xl overflow-hidden mb-3" style={{ border: `1px solid ${COL.line}` }}>
+        {zeilen.map((z, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 text-sm px-3 py-1.5" style={{ borderTop: i ? `1px solid ${COL.line}` : "none" }}>
+            <span>
+              {z.gruppe && <span className="text-xs mr-1" style={{ color: COL.inkMuted }}>{z.gruppe}:</span>}
+              {z.mat ? z.mat.name : z.name}
+              {!z.mat && <span className="text-xs ml-1 px-1.5 py-0.5 rounded-full" style={{ backgroundColor: COL.accentSoft, color: COL.accent }}>neuer Rohstoff</span>}
+            </span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{fmtNum(z.menge, 2)} {z.mat ? z.mat.unit : z.einheit}</span>
+          </div>
+        ))}
+      </div>
+      {eingang.anleitung && <p className="text-sm mb-3" style={{ color: COL.inkMuted }}>{eingang.anleitung}</p>}
+      {neue.length > 0 && <p className="text-xs mb-3" style={{ color: COL.inkMuted }}>Neue Rohstoffe werden mit Preis 0 angelegt – Preis und Allergene bitte unter Rohstoffe nachtragen.</p>}
+      <div className="flex flex-wrap gap-2">
+        <button onClick={uebernehmen} className="text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+          ✅ Rezept {vorhanden ? "ersetzen" : "anlegen"}
+        </button>
+        <button onClick={() => onDone(false)} className="text-sm font-medium px-4 py-2.5 rounded-xl" style={{ border: `1px solid ${COL.line}` }}>
+          Nicht jetzt
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Abgleich zwischen Handy und Laptop ----------
 // Jedes Gerät merkt sich den zuletzt geladenen/gespeicherten Stand ("Basis"). Hat inzwischen ein anderes
 // Gerät gespeichert, werden beim Speichern beide Änderungen zusammengeführt statt überschrieben.
@@ -1551,6 +1646,8 @@ function App() {
   const [lagerlisteInfo, setLagerlisteInfo] = useState(null);
   const [eingang, setEingang] = useState(() => leseBackzettelAusLink());
   const [eingangOk, setEingangOk] = useState(false);
+  const [rezeptEingang, setRezeptEingang] = useState(() => leseRezeptAusLink());
+  const [rezeptOk, setRezeptOk] = useState("");
   const [gruss] = useState(begruessung);
   const [spruch] = useState(() => BAECKER_SPRUECHE[Math.floor(Math.random() * BAECKER_SPRUECHE.length)]);
   const loadedRef = React.useRef(false);
@@ -2173,6 +2270,30 @@ function App() {
           <div className="flex items-center justify-between gap-2 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
             <span>✅ Backzettel vom Lager abgebucht.</span>
             <button onClick={() => setEingangOk(false)} aria-label="Schließen"><X size={16} /></button>
+          </div>
+        )}
+
+        {rezeptEingang && materials.length > 0 && (
+          <RezeptEingang
+            eingang={rezeptEingang}
+            materials={materials}
+            setMaterials={setMaterials}
+            recipes={recipes}
+            setRecipes={setRecipes}
+            onDone={(angelegt) => {
+              try { sessionStorage.removeItem("rezept_eingang"); } catch (e) {}
+              if (angelegt) {
+                setRezeptOk(rezeptEingang.name);
+                setTab("rezepte");
+              }
+              setRezeptEingang(null);
+            }}
+          />
+        )}
+        {rezeptOk && (
+          <div className="flex items-center justify-between gap-2 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+            <span>✅ Rezept „{rezeptOk}“ angelegt – du findest es unter Rezepte.</span>
+            <button onClick={() => setRezeptOk("")} aria-label="Schließen"><X size={16} /></button>
           </div>
         )}
 
