@@ -3294,7 +3294,134 @@ function Chip({ children }) {
   );
 }
 
+// Eine Zutat in ausgewählten Rezepten durch eine andere ersetzen (z.B. falsch zugeordnete Rohstoffe reparieren)
+function ZutatTauschen({ materials, recipes, setRecipes, onClose }) {
+  const sortiert = useMemo(() => [...materials].sort((a, b) => a.name.localeCompare(b.name, "de")), [materials]);
+  const benutzt = useMemo(() => sortiert.filter((m) => recipes.some((r) => r.items.some((it) => it.materialId === m.id))), [sortiert, recipes]);
+  const [von, setVon] = useState("");
+  const [nach, setNach] = useState("");
+  const [auswahl, setAuswahl] = useState(() => new Set());
+  const [fertig, setFertig] = useState("");
+  const betroffen = recipes
+    .filter((r) => r.items.some((it) => it.materialId === von))
+    .sort((a, b) => (a.kategorie || "").localeCompare(b.kategorie || "", "de") || a.name.localeCompare(b.name, "de"));
+  const menge = (r) => r.items.filter((it) => it.materialId === von).reduce((s, it) => s + (Number(it.menge) || 0), 0);
+  const unit = materials.find((m) => m.id === von)?.unit || "";
+  const nachName = materials.find((m) => m.id === nach)?.name || "";
+  const vonName = materials.find((m) => m.id === von)?.name || "";
+  const waehleVon = (id) => {
+    setVon(id);
+    setFertig("");
+    setAuswahl(new Set()); // nichts vorausgewählt – nur Angehaktes wird geändert
+  };
+  const umschalten = (id) =>
+    setAuswahl((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const anzahl = betroffen.filter((r) => auswahl.has(r.id)).length;
+  const tauschen = () => {
+    if (!von || !nach || von === nach || anzahl === 0) return;
+    if (!window.confirm(`„${vonName}“ in ${anzahl} Rezept${anzahl === 1 ? "" : "en"} durch „${nachName}“ ersetzen?`)) return;
+    const ids = new Set(betroffen.filter((r) => auswahl.has(r.id)).map((r) => r.id));
+    setRecipes((prev) =>
+      prev.map((r) => (ids.has(r.id) ? { ...r, items: r.items.map((it) => (it.materialId === von ? { ...it, materialId: nach } : it)) } : r))
+    );
+    setFertig(`✅ In ${ids.size} Rezept${ids.size === 1 ? "" : "en"} ist jetzt „${nachName}“ statt „${vonName}“.`);
+    setVon("");
+    setAuswahl(new Set());
+  };
+  return (
+    <div className="p-4 rounded-2xl" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}` }}>
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div>
+          <h3 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+            🔁 Zutat in Rezepten tauschen
+          </h3>
+          <p className="text-xs mt-0.5" style={{ color: COL.inkMuted }}>
+            Menge und Abschnitt bleiben gleich – nur der Rohstoff wird ersetzt. Nur angehakte Rezepte werden geändert.
+          </p>
+        </div>
+        <button onClick={onClose} style={{ color: COL.inkMuted }} aria-label="Schließen">
+          <X size={18} />
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <Field label="Diese Zutat …">
+          <select style={inputStyle} value={von} onChange={(e) => waehleVon(e.target.value)}>
+            <option value="">– bitte wählen –</option>
+            {benutzt.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="… ersetzen durch">
+          <select style={inputStyle} value={nach} onChange={(e) => setNach(e.target.value)}>
+            <option value="">– bitte wählen –</option>
+            {sortiert
+              .filter((m) => m.id !== von)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.vorteig?.teile?.length ? " (Vorstufe)" : ""}
+                </option>
+              ))}
+          </select>
+        </Field>
+      </div>
+      {fertig && (
+        <div className="text-sm px-3 py-2 rounded-xl mb-3" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+          {fertig}
+        </div>
+      )}
+      {von && (
+        <>
+          <div className="flex items-center justify-between gap-2 text-sm mb-2">
+            <span style={{ color: COL.inkMuted }}>
+              Kommt in {betroffen.length} Rezept{betroffen.length === 1 ? "" : "en"} vor:
+            </span>
+            <span className="flex gap-3 text-xs font-semibold" style={{ color: COL.accent }}>
+              <button onClick={() => setAuswahl(new Set(betroffen.map((r) => r.id)))}>alle</button>
+              <button onClick={() => setAuswahl(new Set())}>keine</button>
+            </span>
+          </div>
+          <div className="flex flex-col rounded-xl overflow-hidden mb-3" style={{ border: `1px solid ${COL.line}` }}>
+            {betroffen.map((r, i) => (
+              <label
+                key={r.id}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm cursor-pointer"
+                style={{ borderTop: i ? `1px solid ${COL.line}` : "none", backgroundColor: auswahl.has(r.id) ? COL.bg : "transparent" }}
+              >
+                <input type="checkbox" checked={auswahl.has(r.id)} onChange={() => umschalten(r.id)} style={{ width: 18, height: 18 }} />
+                <span className="flex-1 min-w-0">
+                  <b>{r.name}</b>
+                  {r.kategorie && <span style={{ color: COL.inkMuted }}> · {r.kategorie}</span>}
+                </span>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: COL.inkMuted }}>
+                  {fmtNum(menge(r))} {unit}
+                </span>
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={tauschen}
+            disabled={!nach || anzahl === 0}
+            className="text-sm font-semibold px-4 py-2.5 rounded-xl"
+            style={{ backgroundColor: !nach || anzahl === 0 ? COL.line : COL.accent, color: "#fff" }}
+          >
+            {nach ? `In ${anzahl} Rezept${anzahl === 1 ? "" : "en"} durch „${nachName}“ ersetzen` : "Ersatz-Zutat wählen"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function RezepteTab({ materials, recipes, setRecipes }) {
+  const [tausch, setTausch] = useState(false);
   const emptyForm = { name: "", kategorie: "", ausbringungMenge: "1", ausbringungEinheit: "Ansatz", stueckProAnsatz: "1", teiggewicht: "", backen: "", anleitung: "", items: [] };
   const categories = useMemo(
     () => [...new Set(recipes.map((r) => r.kategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
@@ -3527,15 +3654,26 @@ function RezepteTab({ materials, recipes, setRecipes }) {
           </p>
         </div>
         {!form && materials.length > 0 && (
-          <button
-            onClick={startAdd}
-            className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg flex-shrink-0"
-            style={{ backgroundColor: COL.accent, color: "#fff", boxShadow: "0 2px 8px rgba(196,98,45,0.35)" }}
-          >
-            <Plus size={15} /> Neues Rezept
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+            <button
+              onClick={startAdd}
+              className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ backgroundColor: COL.accent, color: "#fff", boxShadow: "0 2px 8px rgba(196,98,45,0.35)" }}
+            >
+              <Plus size={15} /> Neues Rezept
+            </button>
+            <button
+              onClick={() => setTausch((v) => !v)}
+              className="text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ border: `1px solid ${COL.line}`, backgroundColor: tausch ? COL.bg : COL.surface, color: COL.ink }}
+            >
+              🔁 Zutat tauschen
+            </button>
+          </div>
         )}
       </div>
+
+      {tausch && !form && <ZutatTauschen materials={materials} recipes={recipes} setRecipes={setRecipes} onClose={() => setTausch(false)} />}
 
       {form && !form.id && formPanel}
 
