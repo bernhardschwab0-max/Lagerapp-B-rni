@@ -2066,6 +2066,25 @@ function App() {
                   </button>
                   <button
                     onClick={() => {
+                      // Komplette Sicherung als Datei (Rohstoffe, Rezepte, Verlauf) – bleibt auf diesem Gerät
+                      const inhalt = JSON.stringify({ art: "lager-sicherung", exportiert: new Date().toISOString(), materials, recipes, columnMap, orderHistory }, null, 1);
+                      const url = URL.createObjectURL(new Blob([inhalt], { type: "application/json" }));
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `Lager-Sicherung ${new Date().toISOString().slice(0, 10)}.json`;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      setTimeout(() => URL.revokeObjectURL(url), 60000);
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.ink }}
+                  >
+                    💾 Sicherung als Datei herunterladen
+                  </button>
+                  <button
+                    onClick={() => {
                       setShowVersionRecovery(true);
                       setShowSettingsMenu(false);
                     }}
