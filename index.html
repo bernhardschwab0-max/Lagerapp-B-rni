@@ -1276,6 +1276,117 @@ function leseRezeptAusLink() {
   }
 }
 
+// Anleitung + Einrichtungs-Link, um die Bestell-App als eigenes Symbol (eigene App) zu nutzen.
+// Auf dem iPhone hat jede Home-Bildschirm-App ihren eigenen Speicher → einmal mit Link + Chef-Code einrichten.
+function BestellAppEinrichten({ onClose }) {
+  const [kopiert, setKopiert] = useState("");
+  const link = useMemo(() => {
+    try {
+      return Zugang.linkBauen("bestell", true);
+    } catch (e) {
+      return "";
+    }
+  }, []);
+  const kopieren = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setKopiert("ok");
+    } catch (e) {
+      setKopiert("hand");
+    }
+  };
+  const nr = (n) => (
+    <span
+      className="flex-shrink-0 flex items-center justify-center text-sm font-bold rounded-full"
+      style={{ width: 26, height: 26, backgroundColor: COL.accent, color: "#fff" }}
+    >
+      {n}
+    </span>
+  );
+  return (
+    <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', serif" }}>
+          📲 Bestell-App als eigene App
+        </h3>
+        <button onClick={onClose} style={{ color: COL.inkMuted }} aria-label="Schließen">
+          <X size={16} />
+        </button>
+      </div>
+      <p className="text-sm mb-4" style={{ color: COL.inkMuted }}>
+        Einmal einrichten – danach öffnest du die Bestell-App direkt mit ihrem eigenen Symbol und brauchst die Lager-App dafür nicht mehr.
+      </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-3">
+          {nr(1)}
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold mb-1.5">Einrichtungs-Link kopieren</div>
+            <button
+              onClick={kopieren}
+              disabled={!link}
+              className="text-sm font-semibold px-3 py-2 rounded-xl"
+              style={{ backgroundColor: link ? COL.accent : COL.line, color: "#fff" }}
+            >
+              🔗 Link kopieren
+            </button>
+            {kopiert === "ok" && (
+              <span className="text-sm ml-2" style={{ color: COL.ok }}>
+                ✅ kopiert
+              </span>
+            )}
+            {kopiert === "hand" && (
+              <div className="mt-2">
+                <div className="text-xs mb-1" style={{ color: COL.inkMuted }}>
+                  Automatisch kopieren geht hier nicht – Feld antippen, „Alles auswählen“ und „Kopieren“:
+                </div>
+                <input readOnly value={link} onFocus={(e) => e.target.select()} style={{ ...inputStyle, width: "100%", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} />
+              </div>
+            )}
+            {!link && (
+              <div className="text-xs mt-1" style={{ color: COL.warn }}>
+                Auf diesem Gerät fehlt der Chef-Zugang – bitte auf einem Chef-Gerät öffnen.
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-3">
+          {nr(2)}
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="font-semibold mb-1.5">Bestell-App in Safari öffnen und aufs Handy holen</div>
+            <a
+              href={BESTELL_APP_URL}
+              target="_blank"
+              rel="noopener"
+              className="inline-block text-sm font-semibold px-3 py-2 rounded-xl"
+              style={{ border: `1px solid ${COL.accent}`, color: COL.accent }}
+            >
+              🧾 Bestell-App in Safari öffnen
+            </a>
+            <div className="mt-1.5" style={{ color: COL.inkMuted }}>
+              Dort unten auf <b>Teilen</b> (Quadrat mit Pfeil ↑) → <b>„Zum Home-Bildschirm“</b> → <b>„Hinzufügen“</b>.
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          {nr(3)}
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="font-semibold mb-1">Neues Symbol „Bestellungen“ öffnen und einrichten</div>
+            <div style={{ color: COL.inkMuted }}>
+              Beim ersten Start kommt „Gerät einrichten“: ins Feld tippen → <b>„Einsetzen“</b> → <b>„Einrichten“</b> → deinen <b>Chef-Code</b> eingeben. Fertig.
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="text-xs mt-4" style={{ color: COL.inkMuted }}>
+        💻 Am Laptop (Chrome oder Edge): Bestell-App öffnen und oben in der Adresszeile auf „App installieren“ klicken – Einrichten ist dort nicht nötig.
+      </p>
+      <p className="text-xs mt-2" style={{ color: COL.warn }}>
+        Der Link enthält deinen Schlüssel – verschlüsselt mit deinem Chef-Code. Nur auf deinen eigenen Geräten verwenden und nicht per WhatsApp oder E-Mail weiterschicken.
+      </p>
+    </div>
+  );
+}
+
 function RezeptEingang({ eingang, materials, setMaterials, recipes, setRecipes, onDone }) {
   const norm = (s) => (s || "").trim().toLowerCase();
   const zeilen = eingang.gruppen.flatMap((g) =>
@@ -1636,6 +1747,7 @@ function App() {
   const [backups, setBackups] = useState([]);
   const [showBackups, setShowBackups] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showBestellApp, setShowBestellApp] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showVersionRecovery, setShowVersionRecovery] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2056,6 +2168,16 @@ function App() {
                   </a>
                   <button
                     onClick={() => {
+                      setShowBestellApp(true);
+                      setShowSettingsMenu(false);
+                    }}
+                    className="w-full text-left text-sm px-4 py-2.5 hover:bg-black/[0.03] transition-colors"
+                    style={{ color: COL.ink }}
+                  >
+                    📲 Bestell-App als eigene App
+                  </button>
+                  <button
+                    onClick={() => {
                       setShowBackups(true);
                       setShowSettingsMenu(false);
                     }}
@@ -2148,6 +2270,8 @@ function App() {
               </div>
             </div>
           </div>
+
+          {showBestellApp && <BestellAppEinrichten onClose={() => setShowBestellApp(false)} />}
 
           {showQR && (
             <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: COL.surface, border: `1px solid ${COL.line}` }}>
