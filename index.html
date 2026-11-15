@@ -1260,20 +1260,72 @@ function BackzettelEingang({ eingang, materials, setMaterials, orderHistory, set
 // Rezepte stehen nicht im öffentlichen Code. Ein Link enthält das Rezept (base64-JSON), die App zeigt es zur
 // Kontrolle und legt es mit einem Tipp an – fehlende Rohstoffe werden neu angelegt (Preis 0, Einheit wie angegeben).
 // Format: { v: 1, name, kategorie, stueck, teiggewicht, backen, anleitung, gruppen: [{ titel, z: [[Zutat, Menge, Einheit?]] }] }
-function leseRezeptAusLink() {
+// Rezept-Link lesen: "#rezept=…" (ein Rezept) oder "#rezepte=…" (mehrere) – aus der Adresse oder aus eingefügtem Text.
+// Liefert eine Liste von Rezepten (Warteschlange) oder null.
+function rezepteAusText(text) {
+  const m = String(text || "").match(/#rezepte?=([A-Za-z0-9_\-%]+)/);
+  if (!m) return null;
   try {
-    if (window.location.hash.startsWith("#rezept=")) {
-      sessionStorage.setItem("rezept_eingang", decodeURIComponent(window.location.hash.slice("#rezept=".length)));
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
-    const raw = sessionStorage.getItem("rezept_eingang");
-    if (!raw) return null;
+    const raw = decodeURIComponent(m[1]);
     const bin = atob(raw.replace(/-/g, "+").replace(/_/g, "/"));
     const p = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
-    return p && typeof p.name === "string" && Array.isArray(p.gruppen) ? p : null;
+    const liste = Array.isArray(p) ? p : Array.isArray(p?.rezepte) ? p.rezepte : [p];
+    const ok = liste.filter((r) => r && typeof r.name === "string" && Array.isArray(r.gruppen));
+    return ok.length ? ok : null;
   } catch (e) {
     return null;
   }
+}
+function leseRezeptAusLink() {
+  try {
+    if (/^#rezepte?=/.test(window.location.hash)) {
+      const liste = rezepteAusText(window.location.hash);
+      if (liste) sessionStorage.setItem("rezept_warteschlange", JSON.stringify(liste));
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+    const raw = sessionStorage.getItem("rezept_warteschlange");
+    const liste = raw ? JSON.parse(raw) : null;
+    return Array.isArray(liste) && liste.length ? liste : null;
+  } catch (e) {
+    return null;
+  }
+}
+// Ein Rezept aus einem Link in Rohstoffe + Rezepte einbauen (fehlende Rohstoffe mit Preis 0 anlegen,
+// gleichnamiges Rezept ersetzen). Reine Funktion – gibt die neuen Listen zurück.
+function rezeptEinbauen(eingang, materials, recipes) {
+  const norm = (s) => (s || "").trim().toLowerCase();
+  const zeilen = eingang.gruppen
+    .flatMap((g) =>
+      (g.z || []).map(([name, menge, einheit]) => {
+        const n = String(name || "").trim();
+        return { name: n, menge: Number(menge) || 0, einheit: einheit || "g", gruppe: (g.titel || "").trim(), mat: findByName(materials, ZUTAT_ALIAS[n] || [n]) };
+      })
+    )
+    .filter((z) => z.name);
+  const neue = [...new Set(zeilen.filter((z) => !z.mat).map((z) => z.name))];
+  const neuMat = neue.map((n) => ({ id: uid(), name: n, price: 0, unit: zeilen.find((z) => z.name === n).einheit, mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: extractAllergens(n) }));
+  const items = zeilen.map((z) => {
+    const m = z.mat || neuMat.find((x) => x.name === z.name);
+    const it = { materialId: m.id, menge: z.menge };
+    if (z.gruppe) it.gruppe = z.gruppe;
+    return it;
+  });
+  const daten = {
+    name: eingang.name.trim(),
+    kategorie: eingang.kategorie || "",
+    ausbringungMenge: 1,
+    ausbringungEinheit: "Ansatz",
+    stueckProAnsatz: Number(eingang.stueck) || 1,
+    teiggewicht: eingang.teiggewicht || "",
+    backen: eingang.backen || "",
+    anleitung: eingang.anleitung || "",
+    items,
+  };
+  const vorhanden = recipes.find((r) => norm(r.name) === norm(eingang.name));
+  return {
+    materials: neuMat.length ? [...materials, ...neuMat] : materials,
+    recipes: vorhanden ? recipes.map((r) => (r.id === vorhanden.id ? { ...r, ...daten } : r)) : [...recipes, { id: uid(), ...daten }],
+  };
 }
 
 // Anleitung + Einrichtungs-Link, um die Bestell-App als eigenes Symbol (eigene App) zu nutzen.
@@ -1387,7 +1439,7 @@ function BestellAppEinrichten({ onClose }) {
   );
 }
 
-function RezeptEingang({ eingang, materials, setMaterials, recipes, setRecipes, onDone }) {
+function RezeptEingang({ eingang, nummer = 1, gesamt = 1, materials, setMaterials, recipes, setRecipes, onDone, onAlle }) {
   const norm = (s) => (s || "").trim().toLowerCase();
   const zeilen = eingang.gruppen.flatMap((g) =>
     (g.z || []).map(([name, menge, einheit]) => {
@@ -1399,26 +1451,9 @@ function RezeptEingang({ eingang, materials, setMaterials, recipes, setRecipes, 
   const vorhanden = recipes.find((r) => norm(r.name) === norm(eingang.name));
 
   const uebernehmen = () => {
-    const neuMat = neue.map((n) => ({ id: uid(), name: n, price: 0, unit: zeilen.find((z) => z.name === n).einheit, mindestbestand: 0, stock: 0, zusatzstoffe: "", allergene: extractAllergens(n) }));
-    const items = zeilen.map((z) => {
-      const m = z.mat || neuMat.find((x) => x.name === z.name);
-      const it = { materialId: m.id, menge: z.menge };
-      if (z.gruppe) it.gruppe = z.gruppe;
-      return it;
-    });
-    const daten = {
-      name: eingang.name.trim(),
-      kategorie: eingang.kategorie || "",
-      ausbringungMenge: 1,
-      ausbringungEinheit: "Ansatz",
-      stueckProAnsatz: Number(eingang.stueck) || 1,
-      teiggewicht: eingang.teiggewicht || "",
-      backen: eingang.backen || "",
-      anleitung: eingang.anleitung || "",
-      items,
-    };
-    if (neuMat.length) setMaterials((prev) => [...prev, ...neuMat]);
-    setRecipes((prev) => (vorhanden ? prev.map((r) => (r.id === vorhanden.id ? { ...r, ...daten } : r)) : [...prev, { id: uid(), ...daten }]));
+    const r = rezeptEinbauen(eingang, materials, recipes);
+    if (r.materials !== materials) setMaterials(r.materials);
+    setRecipes(r.recipes);
     onDone(true);
   };
 
@@ -1426,6 +1461,7 @@ function RezeptEingang({ eingang, materials, setMaterials, recipes, setRecipes, 
     <div className="mb-6 rounded-2xl p-4 sm:p-5" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}`, boxShadow: "0 8px 30px rgba(196,98,45,0.15)", animation: "fadeIn .3s ease" }}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
+          {gesamt > 1 && <div className="text-xs font-semibold mb-0.5" style={{ color: COL.accent }}>Rezept {nummer} von {gesamt}</div>}
           <div className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>📥 Neues Rezept: {eingang.name}</div>
           <div className="text-sm" style={{ color: COL.inkMuted }}>{[eingang.kategorie, `${Number(eingang.stueck) || 1} Stück pro Ansatz`].filter(Boolean).join(" · ")}</div>
         </div>
@@ -1454,8 +1490,13 @@ function RezeptEingang({ eingang, materials, setMaterials, recipes, setRecipes, 
         <button onClick={uebernehmen} className="text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ backgroundColor: COL.accent, color: "#fff" }}>
           ✅ Rezept {vorhanden ? "ersetzen" : "anlegen"}
         </button>
+        {gesamt > 1 && onAlle && (
+          <button onClick={onAlle} className="text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ border: `2px solid ${COL.accent}`, color: COL.accent }}>
+            ✅ Alle {gesamt - nummer + 1} anlegen
+          </button>
+        )}
         <button onClick={() => onDone(false)} className="text-sm font-medium px-4 py-2.5 rounded-xl" style={{ border: `1px solid ${COL.line}` }}>
-          Nicht jetzt
+          {gesamt > 1 ? "Überspringen" : "Nicht jetzt"}
         </button>
       </div>
     </div>
@@ -1759,7 +1800,16 @@ function App() {
   const [eingang, setEingang] = useState(() => leseBackzettelAusLink());
   const [eingangOk, setEingangOk] = useState(false);
   const [rezeptEingang, setRezeptEingang] = useState(() => leseRezeptAusLink());
+  const [rezeptGesamt, setRezeptGesamt] = useState(() => (leseRezeptAusLink() || []).length);
   const [rezeptOk, setRezeptOk] = useState("");
+  // Rezept-Link(s) aus dem Einfügefeld im Rezepte-Bereich übernehmen
+  const rezepteEinfuegen = (liste) => {
+    try { sessionStorage.setItem("rezept_warteschlange", JSON.stringify(liste)); } catch (e) {}
+    setRezeptOk("");
+    setRezeptGesamt(liste.length);
+    setRezeptEingang(liste);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const [gruss] = useState(begruessung);
   const [spruch] = useState(() => BAECKER_SPRUECHE[Math.floor(Math.random() * BAECKER_SPRUECHE.length)]);
   const loadedRef = React.useRef(false);
@@ -2416,26 +2466,48 @@ function App() {
           </div>
         )}
 
-        {rezeptEingang && materials.length > 0 && (
+        {rezeptEingang && rezeptEingang.length > 0 && materials.length > 0 && (
           <RezeptEingang
-            eingang={rezeptEingang}
+            key={rezeptEingang[0].name + rezeptEingang.length}
+            eingang={rezeptEingang[0]}
+            nummer={rezeptGesamt - rezeptEingang.length + 1}
+            gesamt={rezeptGesamt}
             materials={materials}
             setMaterials={setMaterials}
             recipes={recipes}
             setRecipes={setRecipes}
             onDone={(angelegt) => {
-              try { sessionStorage.removeItem("rezept_eingang"); } catch (e) {}
+              const rest = rezeptEingang.slice(1);
+              try {
+                if (rest.length) sessionStorage.setItem("rezept_warteschlange", JSON.stringify(rest));
+                else sessionStorage.removeItem("rezept_warteschlange");
+              } catch (e) {}
               if (angelegt) {
-                setRezeptOk(rezeptEingang.name);
-                setTab("rezepte");
+                setRezeptOk((alt) => [alt, rezeptEingang[0].name].filter(Boolean).join(", "));
+                if (!rest.length) setTab("rezepte");
               }
+              setRezeptEingang(rest.length ? rest : null);
+            }}
+            onAlle={() => {
+              let mats = materials;
+              let recs = recipes;
+              rezeptEingang.forEach((e) => {
+                const r = rezeptEinbauen(e, mats, recs);
+                mats = r.materials;
+                recs = r.recipes;
+              });
+              if (mats !== materials) setMaterials(mats);
+              setRecipes(recs);
+              try { sessionStorage.removeItem("rezept_warteschlange"); } catch (e) {}
+              setRezeptOk((alt) => [alt, ...rezeptEingang.map((e) => e.name)].filter(Boolean).join(", "));
               setRezeptEingang(null);
+              setTab("rezepte");
             }}
           />
         )}
         {rezeptOk && (
           <div className="flex items-center justify-between gap-2 text-sm px-4 py-3 rounded-2xl mb-6" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
-            <span>✅ Rezept „{rezeptOk}“ angelegt – du findest es unter Rezepte.</span>
+            <span>✅ {rezeptOk.includes(", ") ? "Rezepte" : "Rezept"} „{rezeptOk}“ angelegt – du findest {rezeptOk.includes(", ") ? "sie" : "es"} unter Rezepte.</span>
             <button onClick={() => setRezeptOk("")} aria-label="Schließen"><X size={16} /></button>
           </div>
         )}
@@ -2567,7 +2639,7 @@ function App() {
 
         {tab === "rohstoffe" && <RohstoffeTab materials={materials} setMaterials={setMaterials} recipes={recipes} setRecipes={setRecipes} />}
         {tab === "rezepte" && (
-          <RezepteTab materials={materials} recipes={recipes} setRecipes={setRecipes} />
+          <RezepteTab materials={materials} recipes={recipes} setRecipes={setRecipes} onRezepteEinfuegen={rezepteEinfuegen} />
         )}
         {tab === "kalkulation" && (
           <KalkulationTab
@@ -3645,8 +3717,22 @@ function VorteigAbtrennen({ form, setForm, materials }) {
   );
 }
 
-function RezepteTab({ materials, recipes, setRecipes }) {
+function RezepteTab({ materials, recipes, setRecipes, onRezepteEinfuegen }) {
   const [tausch, setTausch] = useState(false);
+  const [einfuegen, setEinfuegen] = useState(false);
+  const [linkText, setLinkText] = useState("");
+  const [linkFehler, setLinkFehler] = useState("");
+  const linkUebernehmen = () => {
+    const liste = rezepteAusText(linkText);
+    if (!liste) {
+      setLinkFehler("Der Link passt nicht – bitte den ganzen Link einfügen (er beginnt mit https:// und enthält „#rezept“).");
+      return;
+    }
+    setLinkFehler("");
+    setLinkText("");
+    setEinfuegen(false);
+    onRezepteEinfuegen && onRezepteEinfuegen(liste);
+  };
   const emptyForm = { name: "", kategorie: "", ausbringungMenge: "1", ausbringungEinheit: "Ansatz", stueckProAnsatz: "1", teiggewicht: "", backen: "", anleitung: "", items: [] };
   const categories = useMemo(
     () => [...new Set(recipes.map((r) => r.kategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de")),
@@ -3897,9 +3983,57 @@ function RezepteTab({ materials, recipes, setRecipes }) {
             >
               🔁 Zutat tauschen
             </button>
+            <button
+              onClick={() => setEinfuegen((v) => !v)}
+              className="text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ border: `1px solid ${COL.line}`, backgroundColor: einfuegen ? COL.bg : COL.surface, color: COL.ink }}
+            >
+              📥 Rezepte einfügen
+            </button>
           </div>
         )}
       </div>
+
+      {einfuegen && !form && (
+        <div className="p-4 rounded-2xl" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}` }}>
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+              📥 Rezepte einfügen
+            </h3>
+            <button onClick={() => setEinfuegen(false)} style={{ color: COL.inkMuted }} aria-label="Schließen">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="text-xs mb-2" style={{ color: COL.inkMuted }}>
+            Rezept-Link (z.B. aus dem Chat) kopieren, hier ins Feld tippen → „Einsetzen“ → „Übernehmen“. Danach siehst du jedes Rezept zum Prüfen und legst es mit einem Tipp an.
+          </p>
+          <textarea
+            style={{ ...inputStyle, width: "100%", minHeight: 80, fontSize: 12, fontFamily: "'IBM Plex Mono', monospace" }}
+            value={linkText}
+            onChange={(e) => {
+              setLinkText(e.target.value);
+              setLinkFehler("");
+            }}
+            placeholder="https://…#rezepte=…"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          {linkFehler && (
+            <div className="text-xs mt-1" style={{ color: COL.warn }}>
+              {linkFehler}
+            </div>
+          )}
+          <button
+            onClick={linkUebernehmen}
+            disabled={!linkText.trim()}
+            className="mt-2 text-sm font-semibold px-4 py-2.5 rounded-xl"
+            style={{ backgroundColor: linkText.trim() ? COL.accent : COL.line, color: "#fff" }}
+          >
+            Übernehmen
+          </button>
+        </div>
+      )}
 
       {tausch && !form && <ZutatTauschen materials={materials} recipes={recipes} setRecipes={setRecipes} onClose={() => setTausch(false)} />}
 
