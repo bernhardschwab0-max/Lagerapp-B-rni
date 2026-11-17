@@ -90,6 +90,20 @@ const Package = (props) => (
   />
 );
 
+const CalendarIcon = (props) => (
+  <Icon
+    {...props}
+    paths={
+      <>
+        <rect x="3" y="4.5" width="18" height="16.5" rx="2" />
+        <path d="M3 9.5h18" />
+        <path d="M8 2.5v4" />
+        <path d="M16 2.5v4" />
+      </>
+    }
+  />
+);
+
 const ChefHat = (props) => (
   <Icon
     {...props}
@@ -842,10 +856,46 @@ const BAECKER_SPRUECHE = [
 const NAV_TABS = [
   { key: "rohstoffe", label: "Rohstoffe", icon: (p) => <Package {...p} /> },
   { key: "rezepte", label: "Rezepte", icon: (p) => <ChefHat {...p} /> },
-  { key: "kalkulation", label: "Kalkulation", icon: (p) => <Calculator {...p} /> },
+  { key: "kalkulation", label: "Kalkulation", mobil: "Kalkul.", icon: (p) => <Calculator {...p} /> },
   { key: "etikett", label: "Etikett", icon: (p) => <Tag {...p} /> },
-  { key: "bestellung", label: "Bestellung", icon: (p) => <ShoppingCart {...p} /> },
+  { key: "bestellung", label: "Bestellung", mobil: "Bestell.", icon: (p) => <ShoppingCart {...p} /> },
+  { key: "planer", label: "Planer", icon: (p) => <CalendarIcon {...p} /> },
 ];
+
+// ---------- Monatsplaner (Börni 17.11.2026) ----------
+// Erinnerungen pro Monat, die ab dem "ab"-Tag des Vormonats oben in der App erscheinen (z.B. Mitte Oktober für November).
+// Eintrag: { id, monat: 1–12, titel, text, ab: Tag im Vormonat, rohstoffe: [materialId], erledigt: { "2026-12": true } }
+const MONATE = ["Jänner", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+// Startbeispiele – feste IDs, damit zwei Geräte sie nicht doppelt anlegen
+function planerBeispiele(materials) {
+  const ids = (...namen) => namen.map((n) => findByName(materials, [n])?.id).filter(Boolean);
+  return [
+    { id: "plan-gansl", monat: 11, titel: "Ganslessen & Wild", text: "Mehr Semmeln backen für Semmelwürferl – die braucht man für die Knödel zum Gansl- und Wildessen.", ab: 15, rohstoffe: [], erledigt: {} },
+    { id: "plan-lebkuchen", monat: 12, titel: "Lebkuchen", text: "Genug Honig für die Lebkuchen im Haus haben.", ab: 15, rohstoffe: ids("Honig"), erledigt: {} },
+    { id: "plan-krampus", monat: 12, titel: "Brioche-Krampusse", text: "Rosinen für die Augen der Brioche-Krampusse.", ab: 15, rohstoffe: ids("Rosinen"), erledigt: {} },
+    { id: "plan-kekse", monat: 12, titel: "Weihnachtskekse", text: "Genug Marmelade für die Weihnachtskekse.", ab: 15, rohstoffe: ids("Ribiselmarmelade", "MarillenM."), erledigt: {} },
+    { id: "plan-kletzen", monat: 12, titel: "Kletzenbrot", text: "Kletzen und Haselnüsse für das Kletzenbrot.", ab: 15, rohstoffe: ids("Kletzen", "Haselnüsse"), erledigt: {} },
+  ];
+}
+// Heute fällige Erinnerungen: vom "ab"-Tag des Vormonats bis zum Ende des Zielmonats, solange nicht erledigt
+function planerFaellig(planer, heute = new Date()) {
+  const out = [];
+  (planer || []).forEach((p) => {
+    const m = Number(p.monat);
+    if (!(m >= 1 && m <= 12)) return;
+    for (const jahr of [heute.getFullYear(), heute.getFullYear() + 1]) {
+      const start = new Date(jahr, m - 2, Math.min(28, Math.max(1, Number(p.ab) || 15)));
+      const ende = new Date(jahr, m, 0, 23, 59, 59);
+      if (heute >= start && heute <= ende) {
+        const schluessel = `${jahr}-${String(m).padStart(2, "0")}`;
+        if (!p.erledigt?.[schluessel]) out.push({ ...p, schluessel, jahr });
+        break;
+      }
+    }
+  });
+  return out.sort((a, b) => a.schluessel.localeCompare(b.schluessel) || (a.titel || "").localeCompare(b.titel || "", "de"));
+}
+const vormonatName = (m) => MONATE[(Number(m) + 10) % 12];
 
 function TabButton({ active, onClick, icon: Icon, children }) {
   return (
@@ -1587,6 +1637,7 @@ const lagerNormalisieren = (rec) => ({
   recipes: rec?.recipes || [],
   columnMap: rec?.columnMap || {},
   orderHistory: rec?.orderHistory || [],
+  planer: rec?.planer || [],
 });
 
 // ---------- Protokoll: was wurde im Lager geändert? (kurze Sätze für den Team-Speicher) ----------
@@ -1785,6 +1836,7 @@ function App() {
   const [recipes, setRecipes] = useState(seedRecipes);
   const [columnMap, setColumnMap] = useState({});
   const [orderHistory, setOrderHistory] = useState([]);
+  const [planer, setPlaner] = useState([]);
   const [backups, setBackups] = useState([]);
   const [showBackups, setShowBackups] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -1884,8 +1936,11 @@ function App() {
           if (data.recipes) setRecipes(recs);
           if (data.columnMap) setColumnMap(data.columnMap);
           if (data.orderHistory) setOrderHistory(data.orderHistory);
+          // Monatsplaner: beim allerersten Mal mit Börnis Beispielen starten (danach nie wieder automatisch)
+          const plan = Array.isArray(data.planer) ? data.planer : mats.length > 0 ? planerBeispiele(mats) : [];
+          setPlaner(plan);
           // Nur speichern, wenn beim Laden wirklich etwas angepasst wurde (Import, Reparatur) – spart Zugriffe
-          const geladen = lagerNormalisieren({ ...data, materials: data.materials ? mats : undefined, recipes: data.recipes ? recs : undefined });
+          const geladen = lagerNormalisieren({ ...data, materials: data.materials ? mats : undefined, recipes: data.recipes ? recs : undefined, planer: plan });
           skipSaveRef.current = gleichJson(geladen, basisRef.current);
           setBackups(existingBackups);
 
@@ -1921,7 +1976,7 @@ function App() {
 
   const latestRef = React.useRef({});
   useEffect(() => {
-    latestRef.current = { materials, recipes, columnMap, orderHistory, backups, config };
+    latestRef.current = { materials, recipes, columnMap, orderHistory, planer, backups, config };
   });
 
   const uebernehmen = (d) => {
@@ -1930,10 +1985,11 @@ function App() {
     setRecipes(d.recipes);
     setColumnMap(d.columnMap);
     setOrderHistory(d.orderHistory);
+    setPlaner(d.planer || []);
   };
   const aktuellerStand = () => {
     const l = latestRef.current;
-    return { materials: l.materials, recipes: l.recipes, columnMap: l.columnMap || {}, orderHistory: l.orderHistory || [] };
+    return { materials: l.materials, recipes: l.recipes, columnMap: l.columnMap || {}, orderHistory: l.orderHistory || [], planer: l.planer || [] };
   };
 
   // Speichern mit Abgleich: vor JEDEM Speichern nachsehen, ob ein anderes Gerät inzwischen gespeichert hat –
@@ -1971,7 +2027,7 @@ function App() {
     dirtyRef.current = true;
     setSyncState("saving");
     const t = setTimeout(() => {
-      const mein = { materials, recipes, columnMap, orderHistory };
+      const mein = { materials, recipes, columnMap, orderHistory, planer };
       saveChainRef.current = saveChainRef.current
         .then(() => speichern(mein))
         .then(() => {
@@ -1984,7 +2040,7 @@ function App() {
         });
     }, 800);
     return () => clearTimeout(t);
-  }, [materials, recipes, columnMap, orderHistory]);
+  }, [materials, recipes, columnMap, orderHistory, planer]);
 
   // Neuesten Stand holen (beim Zurückkehren in die App oder per Knopf) – nur wenn hier nichts ungespeichert ist
   const vomSpeicherHolen = async (zwingend = false) => {
@@ -2160,9 +2216,9 @@ function App() {
                   onClick={() => Zugang.abmelden()}
                   className="text-xs font-semibold px-2.5 py-2 rounded-xl whitespace-nowrap"
                   style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "#fff" }}
-                  title="Abmelden"
+                  title={`${Zugang.sitzung?.name || ""} abmelden`}
                 >
-                  👤 {Zugang.sitzung?.name} · Abmelden
+                  👤 <span className="hidden sm:inline">{Zugang.sitzung?.name} · </span>Abmelden
                 </button>
                 <button
                   onClick={() => setShowSettingsMenu((v) => !v)}
@@ -2239,7 +2295,7 @@ function App() {
                   <button
                     onClick={() => {
                       // Komplette Sicherung als Datei (Rohstoffe, Rezepte, Verlauf) – bleibt auf diesem Gerät
-                      const inhalt = JSON.stringify({ art: "lager-sicherung", exportiert: new Date().toISOString(), materials, recipes, columnMap, orderHistory }, null, 1);
+                      const inhalt = JSON.stringify({ art: "lager-sicherung", exportiert: new Date().toISOString(), materials, recipes, columnMap, orderHistory, planer }, null, 1);
                       const url = URL.createObjectURL(new Blob([inhalt], { type: "application/json" }));
                       const a = document.createElement("a");
                       a.href = url;
@@ -2364,6 +2420,7 @@ function App() {
               if (record.materials) setMaterials(record.materials);
               if (record.recipes) setRecipes(record.recipes);
               if (record.columnMap) setColumnMap(record.columnMap);
+              if (record.planer) setPlaner(record.planer);
               setShowVersionRecovery(false);
             }}
           />
@@ -2629,14 +2686,26 @@ function App() {
                 >
                   <TabIcon size={19} strokeWidth={on ? 2.4 : 2} />
                 </span>
-                <span className="text-[11px]" style={{ fontWeight: on ? 600 : 500 }}>
-                  {t.label}
+                <span className="text-[10px] whitespace-nowrap" style={{ fontWeight: on ? 600 : 500 }}>
+                  {t.mobil || t.label}
                 </span>
               </button>
             );
           })}
         </nav>
 
+        {tab === "rohstoffe" && (
+          <PlanerHinweis
+            planer={planer}
+            setPlaner={setPlaner}
+            materials={materials}
+            onOeffnen={() => {
+              setTab("planer");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        )}
+        {tab === "planer" && <PlanerTab planer={planer} setPlaner={setPlaner} materials={materials} />}
         {tab === "rohstoffe" && <RohstoffeTab materials={materials} setMaterials={setMaterials} recipes={recipes} setRecipes={setRecipes} />}
         {tab === "rezepte" && (
           <RezepteTab materials={materials} recipes={recipes} setRecipes={setRecipes} onRezepteEinfuegen={rezepteEinfuegen} />
@@ -2995,6 +3064,239 @@ function InvoiceScanPanel({ materials, setMaterials, onClose }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Rohstoff-Kärtchen mit Lagerstand (rot, wenn leer oder unter dem Mindestbestand)
+function PlanerRohstoff({ m }) {
+  const knapp = (Number(m.stock) || 0) <= 0 || (Number(m.mindestbestand) > 0 && Number(m.stock) <= Number(m.mindestbestand));
+  return (
+    <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ backgroundColor: knapp ? COL.warnSoft || "#FBE4DC" : COL.okSoft, color: knapp ? COL.warn : COL.ok }}>
+      {knapp ? "⚠️" : "✓"} {m.name}: {lagerMenge(m)} im Lager
+    </span>
+  );
+}
+
+// Karte oben auf der Startseite: was jetzt für den nächsten Monat vorzubereiten ist
+function PlanerHinweis({ planer, setPlaner, materials, onOeffnen }) {
+  const faellig = planerFaellig(planer);
+  if (!faellig.length) return null;
+  const erledigt = (p) => setPlaner((prev) => prev.map((x) => (x.id === p.id ? { ...x, erledigt: { ...(x.erledigt || {}), [p.schluessel]: true } } : x)));
+  return (
+    <div className="mb-6 rounded-2xl p-4" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.amber}`, boxShadow: "0 6px 20px rgba(196,140,45,0.12)" }}>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="text-lg" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
+          📅 Jetzt vorbereiten
+        </div>
+        <button onClick={onOeffnen} className="text-xs font-semibold" style={{ color: COL.accent }}>
+          Planer öffnen →
+        </button>
+      </div>
+      <div className="flex flex-col gap-3">
+        {faellig.map((p) => {
+          const mats = (p.rohstoffe || []).map((id) => materials.find((m) => m.id === id)).filter(Boolean);
+          return (
+            <div key={p.id + p.schluessel} className="rounded-xl p-3" style={{ backgroundColor: COL.bg }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold mb-0.5" style={{ color: COL.amber }}>
+                    für {MONATE[p.monat - 1]} {p.jahr}
+                  </div>
+                  <div className="font-semibold">{p.titel}</div>
+                  {p.text && <div className="text-sm mt-0.5" style={{ color: COL.inkMuted }}>{p.text}</div>}
+                </div>
+                <button onClick={() => erledigt(p)} className="flex-shrink-0 text-xs font-semibold px-2.5 py-1.5 rounded-lg" style={{ border: `1px solid ${COL.ok}`, color: COL.ok }}>
+                  ✓ erledigt
+                </button>
+              </div>
+              {mats.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {mats.map((m) => (
+                    <PlanerRohstoff key={m.id} m={m} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Planer-Reiter: alle Erinnerungen nach Monat, anlegen / bearbeiten / löschen
+function PlanerTab({ planer, setPlaner, materials }) {
+  const leer = { monat: String(new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2), titel: "", text: "", ab: "15", rohstoffe: [] };
+  const [form, setForm] = useState(null);
+  const sortiert = useMemo(() => [...materials].sort((a, b) => a.name.localeCompare(b.name, "de")), [materials]);
+  const faelligIds = new Set(planerFaellig(planer).map((p) => p.id));
+  const speichern = () => {
+    if (!form.titel.trim()) return;
+    const daten = { monat: Number(form.monat), titel: form.titel.trim(), text: form.text.trim(), ab: Math.min(28, Math.max(1, Number(form.ab) || 15)), rohstoffe: form.rohstoffe };
+    if (form.id) setPlaner((prev) => prev.map((p) => (p.id === form.id ? { ...p, ...daten } : p)));
+    else setPlaner((prev) => [...prev, { id: uid(), erledigt: {}, ...daten }]);
+    setForm(null);
+  };
+  const loeschen = (p) => window.confirm(`Erinnerung „${p.titel}“ löschen?`) && setPlaner((prev) => prev.filter((x) => x.id !== p.id));
+  const wiederOeffnen = (p) => setPlaner((prev) => prev.map((x) => (x.id === p.id ? { ...x, erledigt: {} } : x)));
+  const formular = form && (
+    <div className="p-4 rounded-2xl" style={{ backgroundColor: COL.surface, border: `2px solid ${COL.accent}` }}>
+      <h3 className="text-lg mb-3" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600 }}>
+        {form.id ? "✏️ Erinnerung bearbeiten" : "✨ Neue Erinnerung"}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <Field label="Für welchen Monat?">
+          <select style={inputStyle} value={form.monat} onChange={(e) => setForm({ ...form, monat: e.target.value })}>
+            {MONATE.map((n, i) => (
+              <option key={n} value={String(i + 1)}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={`Erinnern ab dem … ${vormonatName(form.monat)}`}>
+          <input style={inputStyle} inputMode="numeric" value={form.ab} onChange={(e) => setForm({ ...form, ab: e.target.value })} placeholder="15" />
+        </Field>
+      </div>
+      <Field label="Anlass (z.B. Ganslessen, Lebkuchen)">
+        <input style={{ ...inputStyle, width: "100%" }} value={form.titel} onChange={(e) => setForm({ ...form, titel: e.target.value })} />
+      </Field>
+      <div className="mt-3">
+        <Field label="Was ist zu tun?">
+          <textarea style={{ ...inputStyle, width: "100%", minHeight: 70 }} value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="z.B. mehr Semmeln für Semmelwürferl backen" />
+        </Field>
+      </div>
+      <div className="mt-3">
+        <span className="text-sm block mb-1.5" style={{ color: COL.inkMuted }}>
+          Rohstoffe, die dann im Haus sein müssen (zeigt den Lagerstand an)
+        </span>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {form.rohstoffe.map((id) => {
+            const m = materials.find((x) => x.id === id);
+            return (
+              <span key={id} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ backgroundColor: COL.bg, border: `1px solid ${COL.line}` }}>
+                {m ? m.name : "(gelöscht)"}
+                <button onClick={() => setForm({ ...form, rohstoffe: form.rohstoffe.filter((x) => x !== id) })} aria-label="entfernen" style={{ color: COL.warn }}>
+                  <X size={12} />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+        <select
+          style={inputStyle}
+          value=""
+          onChange={(e) => e.target.value && !form.rohstoffe.includes(e.target.value) && setForm({ ...form, rohstoffe: [...form.rohstoffe, e.target.value] })}
+        >
+          <option value="">+ Rohstoff dazu …</option>
+          {sortiert
+            .filter((m) => !form.rohstoffe.includes(m.id))
+            .map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+        </select>
+      </div>
+      <div className="flex gap-2 mt-4">
+        <button onClick={speichern} disabled={!form.titel.trim()} className="text-sm font-medium px-4 py-2 rounded-lg" style={{ backgroundColor: form.titel.trim() ? COL.accent : COL.line, color: "#fff" }}>
+          Speichern
+        </button>
+        <button onClick={() => setForm(null)} className="text-sm font-medium px-4 py-2 rounded-lg" style={{ border: `1px solid ${COL.line}` }}>
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-2xl" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700 }}>
+            Monatsplaner
+          </h2>
+          <p className="text-sm" style={{ color: COL.inkMuted }}>
+            Ab dem eingestellten Tag im Vormonat erscheint die Erinnerung oben auf der Startseite.
+          </p>
+        </div>
+        {!form && (
+          <button onClick={() => setForm({ ...leer })} className="flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg flex-shrink-0" style={{ backgroundColor: COL.accent, color: "#fff" }}>
+            <Plus size={15} /> Erinnerung
+          </button>
+        )}
+      </div>
+      {formular}
+      {planer.length === 0 && !form && (
+        <Card>
+          <p className="text-sm py-6 text-center" style={{ color: COL.inkMuted }}>
+            Noch keine Erinnerungen.
+          </p>
+        </Card>
+      )}
+      {MONATE.map((name, i) => {
+        const liste = planer.filter((p) => Number(p.monat) === i + 1).sort((a, b) => (a.titel || "").localeCompare(b.titel || "", "de"));
+        if (!liste.length) return null;
+        return (
+          <div key={name}>
+            <div className="text-sm font-semibold mb-2" style={{ color: COL.inkMuted }}>
+              {name}
+            </div>
+            <div className="flex flex-col gap-2">
+              {liste.map((p) =>
+                form && form.id === p.id ? null : (
+                  <div key={p.id} className="rounded-2xl p-3" style={{ backgroundColor: COL.surface, border: `1px solid ${faelligIds.has(p.id) ? COL.amber : COL.line}` }}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold">
+                          {p.titel}
+                          {faelligIds.has(p.id) && (
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: COL.amberSoft, color: COL.amber }}>
+                              jetzt fällig
+                            </span>
+                          )}
+                          {Object.keys(p.erledigt || {}).length > 0 && !faelligIds.has(p.id) && (
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: COL.okSoft, color: COL.ok }}>
+                              ✓ erledigt {Object.keys(p.erledigt).sort().slice(-1)[0].slice(0, 4)}
+                            </span>
+                          )}
+                        </div>
+                        {p.text && <div className="text-sm mt-0.5" style={{ color: COL.inkMuted }}>{p.text}</div>}
+                        <div className="text-xs mt-1" style={{ color: COL.inkMuted }}>
+                          Erinnerung ab {p.ab || 15}. {vormonatName(p.monat)}
+                        </div>
+                        {(p.rohstoffe || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {p.rohstoffe
+                              .map((id) => materials.find((m) => m.id === id))
+                              .filter(Boolean)
+                              .map((m) => (
+                                <PlanerRohstoff key={m.id} m={m} />
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0 text-xs font-semibold">
+                        <button onClick={() => setForm({ id: p.id, monat: String(p.monat), titel: p.titel || "", text: p.text || "", ab: String(p.ab || 15), rohstoffe: [...(p.rohstoffe || [])] })} style={{ color: COL.accent }}>
+                          Bearbeiten
+                        </button>
+                        {Object.keys(p.erledigt || {}).length > 0 && (
+                          <button onClick={() => wiederOeffnen(p)} style={{ color: COL.inkMuted }}>
+                            wieder offen
+                          </button>
+                        )}
+                        <button onClick={() => loeschen(p)} style={{ color: COL.warn }}>
+                          Löschen
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
